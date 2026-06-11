@@ -32,6 +32,7 @@ pip install -r requirements.txt
 You need a Google Gemini API key to run the LLM. You can get a free tier key from Google AI Studio.
 
 a. Copy the .env.example file and rename the copy to .env.
+
 b. Open newly named .env and paste your Gemini API key here:
 ```bash
 GEMINI_API_KEY=your_actual_key_here
