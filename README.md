@@ -2,11 +2,14 @@
 
 ## Folder Structure Overview
 * `app.py`: Main Streamlit application entry point.
-* `pages/`: Contains the analytics dashboard interface.
-* `rag_engine.py` / `rag_engineV2.py`: Core RAG logic and LLM integrations.
-* `cluster_engine.py`: Handles the k-means clustering of user queries.
+* `src/`: Core logic and AI integrations (`rag_engine.py`, `cluster_engine.py`).
+* `scripts/`: Utility and testing scripts (`test_clustering.py`, `view_results.py`).
+* `pages/`: Contains the analytics dashboard interface (`dashboard.py`).
 * `db_tools/`: Scripts for initializing, seeding, and resetting the databases.
 * `docs/`: Contains the source documents (e.g., `cleaned student handbook.docx`).
+* `archive/`: Stores deprecated or legacy code.
+* `README.md`: Project documentation.
+* `requirements.txt`: Python dependencies.
 
 ## Local Setup Instructions
 
