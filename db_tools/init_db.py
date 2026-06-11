@@ -15,6 +15,7 @@ def setup_database():
             cluster_id INTEGER PRIMARY KEY AUTOINCREMENT,
             cluster_name TEXT NOT NULL,
             cluster_summary TEXT,
+            centroid BLOB,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )
     ''')

@@ -295,11 +295,20 @@ with st.sidebar:
     </div>
     """, unsafe_allow_html=True)
 
+    distance_threshold = st.slider(
+        "Distance Threshold",
+        min_value=0.10,
+        max_value=0.50,
+        value=0.22,
+        step=0.01,
+        help="Lower = tighter, more specific clusters. Higher = broader clusters that group more queries together."
+    )
+
     if st.button("▶  Run Cluster Engine", width='stretch'):
         with st.spinner("Clustering queries… this may take a minute."):
             try:
                 from src.cluster_engine import run_clustering
-                run_clustering()
+                run_clustering(distance_threshold=distance_threshold)
                 st.cache_data.clear()
                 st.success("Clustering complete! Dashboard refreshed.")
             except Exception as e:
