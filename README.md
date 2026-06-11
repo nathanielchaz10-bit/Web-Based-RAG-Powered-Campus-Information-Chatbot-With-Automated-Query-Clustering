@@ -16,30 +16,38 @@ Follow these steps to get the project running on your own machine.
 ```bash
 git clone https://github.com/nathanielchaz10-bit/Web-Based-RAG-Powered-Campus-Information-Chatbot-With-Automated-Query-Clustering
 cd RAGV6
+```
 
 ### 2. Set Up the Virtual Environment
+```bash
 python -m venv venv
+```
 
 ### 3. Install Dependencies
+```bash
 pip install -r requirements.txt
+```
 
 ### 4. Configure Environment Variables
 You need a Google Gemini API key to run the LLM. You can get a free tier key from Google AI Studio.
 
     a. Copy the .env.example file and rename the copy to .env.
     b. Open newly named .env and paste your Gemini API key here:
+    ```bash
     GEMINI_API_KEY=your_actual_key_here
+    ```
     c. Paste the team LangSmith API key (ask the project lead for this key via direct message).
     LANGCHAIN_API_KEY=actual_team_key_here
 
 ### 5. Initialize the Databases
 Before running the app, you need to set up your local SQLite and Chroma vector databases. Run the setup scripts provided in the tools folder:
-
+```bash
 python db_tools/init_db.py
 python db_tools/seed_db.py
+```
 
 6. Run the Application
 Start the Streamlit server:
-
+```bash
 streamlit run app.py
-
+```
