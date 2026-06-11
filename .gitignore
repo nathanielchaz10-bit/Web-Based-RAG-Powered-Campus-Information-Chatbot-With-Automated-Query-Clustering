@@ -1,0 +1,19 @@
+# Security
+.env
+
+# Virtual Environments
+venv/
+env/
+
+# Python Cache
+__pycache__/
+*.pyc
+
+# Local Databases (Groupmates will generate their own)
+chroma_db/
+analytics.db
+
+# IDE / Editor Files
+tempCodeRunnerFile.py
+.vscode/
+.DS_Store
