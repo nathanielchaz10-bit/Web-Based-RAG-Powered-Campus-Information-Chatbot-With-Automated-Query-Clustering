@@ -39,24 +39,28 @@ def run_rag_pipeline():
     print()
     print("Starting RAG pipeline.")
 
+    base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    chroma_db_path = os.path.join(base_dir, 'chroma_db')
+    docs_path = os.path.join(base_dir, 'docs')
+
     # set up the embedding model
     embeddings = GoogleGenerativeAIEmbeddings(model="gemini-embedding-2", task_type=None)
 
-    if os.path.exists("./chroma_db"):
+    if os.path.exists(chroma_db_path):
         print()
         print("Found existing database. Loading from disk.")
 
         vectorstore = Chroma(
-            persist_directory="./chroma_db", 
+            persist_directory=chroma_db_path,
             embedding_function=embeddings
         )
-        
+
     else:
         print()
         print("No database found. Building from scratch.")
-        
+
         # 1. load documents ('docs' folder)
-        docs = load_documents_from_folder("docs")
+        docs = load_documents_from_folder(docs_path)
         if not docs:
             print()
             print("Error 404: Please put a PDF or DOCX file in the 'docs' folder.")
@@ -89,10 +93,10 @@ def run_rag_pipeline():
         print()
 
         vectorstore = Chroma(
-            persist_directory="./chroma_db", 
+            persist_directory=chroma_db_path,
             embedding_function=embeddings
         )
-        
+
         successful_chunks = 0
         for i, split in enumerate(splits):
             try:
@@ -165,10 +169,10 @@ def run_rag_pipeline():
     return rag_chain
 
 def log_query_to_db(query_text, answer_text=None):
-    # saves the questions to the database
-    # need pa irevise to fit ERD na nagawa
     try:
-        conn = sqlite3.connect('analytics.db')
+        base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        db_path = os.path.join(base_dir, 'analytics.db')
+        conn = sqlite3.connect(db_path)
         cursor = conn.cursor()
         clean_query = query_text.lower().strip()
         cursor.execute(

@@ -9,9 +9,12 @@ from sklearn.preprocessing import normalize
 load_dotenv()
 
 def run_clustering():
+    base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    db_path = os.path.join(base_dir, 'analytics.db')
+
     print()
     print("Connecting to analytics database.")
-    conn = sqlite3.connect('analytics.db')
+    conn = sqlite3.connect(db_path)
     cursor = conn.cursor()
 
     # 1. Fetch queries that haven't been clustered yet
@@ -48,9 +51,9 @@ def run_clustering():
     # 3. Perform Agglomerative Clustering
     print("Normalizing vectors and running Agglomerative Clustering...")
     normed = normalize(vectors)
-    agg = AgglomerativeClustering(n_clusters=None, 
-                                  distance_threshold=0.22, 
-                                  metric='cosine', 
+    agg = AgglomerativeClustering(n_clusters=None,
+                                  distance_threshold=0.22,
+                                  metric='euclidean',
                                   linkage='ward')
     labels = agg.fit_predict(normed)
 
