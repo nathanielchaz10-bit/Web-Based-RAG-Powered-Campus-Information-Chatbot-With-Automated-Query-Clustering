@@ -1,5 +1,5 @@
 import streamlit as st
-from rag_engineV2 import run_rag_pipeline, log_query_to_db
+from src.rag_engine import run_rag_pipeline, log_query_to_db
 
 st.set_page_config(page_title="HCCS Chatbot", page_icon="🎓", layout="centered")
 

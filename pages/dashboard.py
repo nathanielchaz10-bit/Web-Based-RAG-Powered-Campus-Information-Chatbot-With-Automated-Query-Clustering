@@ -298,7 +298,7 @@ with st.sidebar:
     if st.button("▶  Run Cluster Engine", width='stretch'):
         with st.spinner("Clustering queries… this may take a minute."):
             try:
-                from cluster_engine import run_clustering
+                from src.cluster_engine import run_clustering
                 run_clustering()
                 st.cache_data.clear()
                 st.success("Clustering complete! Dashboard refreshed.")
