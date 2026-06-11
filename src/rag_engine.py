@@ -121,7 +121,7 @@ def run_rag_pipeline():
         print(f"Successfully embedded {successful_chunks}/{len(splits)} chunks.")
 
     # 5. set up retriever
-    retriever = vectorstore.as_retriever(search_kwargs={"k": 3})
+    retriever = vectorstore.as_retriever(search_kwargs={"k": 5})
 
     # 6. set up the LLM and prompt
     llm = ChatGoogleGenerativeAI(model="gemini-2.5-flash", temperature=0)
