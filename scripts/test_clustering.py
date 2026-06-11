@@ -1,3 +1,4 @@
+import os
 import sqlite3
 import numpy as np
 from dotenv import load_dotenv
@@ -8,8 +9,11 @@ from sklearn.preprocessing import normalize
 load_dotenv()
 
 def run_agglomerative_test():
+
+    base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    db_path = os.path.join(base_dir, 'analytics.db')
     print("Connecting to analytics database...")
-    conn = sqlite3.connect('analytics.db')
+    conn = sqlite3.connect(db_path)
     cursor = conn.cursor()
 
     # Fetch the exact same 41 questions
