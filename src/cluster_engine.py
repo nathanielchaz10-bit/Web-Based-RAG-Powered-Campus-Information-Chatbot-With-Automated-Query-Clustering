@@ -12,7 +12,7 @@ load_dotenv()
 
 MIN_CLUSTER_SIZE = 3
 
-def run_clustering(distance_threshold=0.22):
+def run_clustering(distance_threshold=1.5):
     base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     db_path = os.path.join(base_dir, 'analytics.db')
 
