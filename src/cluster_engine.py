@@ -5,34 +5,86 @@ import json
 import numpy as np
 from dotenv import load_dotenv
 from langchain_google_genai import GoogleGenerativeAIEmbeddings, ChatGoogleGenerativeAI
-from sklearn.cluster import AgglomerativeClustering
+from sklearn.cluster import HDBSCAN
 from sklearn.preprocessing import normalize
-from scipy.cluster.hierarchy import linkage as scipy_linkage
 
 load_dotenv()
 
+# Smallest group HDBSCAN will treat as a real cluster. Queries that don't fall
+# into any cluster this size are labelled noise (-1) and left unclustered.
 MIN_CLUSTER_SIZE = 3
 
-# Cross-run merge bar. Gemini text embeddings are anisotropic (all vectors
-# point in a broadly similar direction), so baseline cosine similarity between
-# any two centroids is already high. Keep this strict so only genuinely
-# near-identical topics fold into an existing cluster.
-MERGE_THRESHOLD = 0.95
+# How conservative HDBSCAN is about declaring noise. Lower = fewer points
+# dropped as noise, which suits the small query volumes a campus chatbot sees
+# early on. 1 is the least conservative setting.
+MIN_SAMPLES = 1
 
-def _find_optimal_k(normed: np.ndarray) -> int:
-    """Pick k via the acceleration (elbow) of ward merge distances."""
-    n = len(normed)
-    if n <= 2:
-        return n
-    Z = scipy_linkage(normed, method='ward', metric='euclidean')
-    dists = Z[:, 2]
-    if len(dists) < 3:
-        return max(2, n // 6)
-    accel = np.diff(dists, 2)
-    # The biggest jump in acceleration marks the natural elbow
-    k = int(accel[::-1].argmax()) + 2
-    # Clamp: at least 2 clusters, at most n//3
-    return max(2, min(k, max(2, n // 3)))
+EMBEDDING_MODEL = "gemini-embedding-001"
+
+
+def _ensure_schema(conn, cursor):
+    """Add the cached-embedding column to user_queries if it isn't there yet."""
+    try:
+        cursor.execute("ALTER TABLE user_queries ADD COLUMN embedding BLOB")
+        conn.commit()
+        print("Added embedding column to user_queries.")
+    except sqlite3.OperationalError:
+        pass  # Column already exists
+
+
+def _embed_missing_queries(conn, cursor):
+    """Embed any queries with no cached vector yet and store them in the DB.
+
+    Embeddings are computed exactly once per query and cached, so re-running the
+    cluster engine never re-embeds the same text. This is what lets us safely
+    re-cluster every query from scratch on each run.
+    """
+    cursor.execute("SELECT query_id, query_text FROM user_queries WHERE embedding IS NULL")
+    rows = cursor.fetchall()
+    if not rows:
+        return
+
+    print(f"Embedding {len(rows)} new queries (caching vectors to DB)...")
+    model = GoogleGenerativeAIEmbeddings(model=EMBEDDING_MODEL)
+
+    ids = [r[0] for r in rows]
+    texts = [r[1] for r in rows]
+    batch_size = 90
+    for i in range(0, len(texts), batch_size):
+        batch_ids = ids[i : i + batch_size]
+        batch_texts = texts[i : i + batch_size]
+        print(f"Processing batch {i} to {i + len(batch_texts)}.")
+        batch_vectors = model.embed_documents(batch_texts)
+
+        for qid, vec in zip(batch_ids, batch_vectors):
+            cursor.execute(
+                "UPDATE user_queries SET embedding = ? WHERE query_id = ?",
+                (json.dumps(vec), qid),
+            )
+        conn.commit()
+
+        if i + batch_size < len(texts):
+            print("Approaching API limit. Sleeping for 60 seconds.")
+            time.sleep(60)
+
+
+def _name_cluster(llm, questions):
+    """Ask Gemini for a short category name, with retries on transient errors."""
+    prompt = (
+        f"Look at these questions asked by students: {questions}. "
+        "What is a short, 2-3 word professional category name for these questions? "
+        "(e.g., 'Financial Inquiries', 'Grading Policies'). Reply with ONLY the name."
+    )
+    max_retries = 3
+    for attempt in range(max_retries):
+        try:
+            return llm.invoke(prompt).content.strip()
+        except Exception:
+            print(f"API Server busy. Retrying in 10 seconds. (Attempt {attempt + 1}/{max_retries})")
+            time.sleep(10)
+    print("Failed to get name from Gemini. Using default name.")
+    return "Unnamed Cluster"
+
 
 def run_clustering():
     base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -43,135 +95,88 @@ def run_clustering():
     conn = sqlite3.connect(db_path)
     cursor = conn.cursor()
 
-    # Migrate schema: add centroid column if it doesn't exist yet
-    try:
-        cursor.execute("ALTER TABLE query_clusters ADD COLUMN centroid BLOB")
-        conn.commit()
-        print("Added centroid column to query_clusters.")
-    except sqlite3.OperationalError:
-        pass  # Column already exists
+    _ensure_schema(conn, cursor)
 
-    # 1. Fetch queries that haven't been clustered yet
-    cursor.execute("SELECT query_id, query_text FROM user_queries WHERE cluster_id IS NULL")
-    unclustered_queries = cursor.fetchall()
+    # 1. Make sure every query has a cached embedding
+    _embed_missing_queries(conn, cursor)
 
-    if not unclustered_queries:
+    # 2. Load ALL queries that have an embedding — we re-cluster the full set
+    #    every run rather than incrementally merging, which avoids the stale
+    #    centroid problems of the old cross-run merge approach.
+    cursor.execute("SELECT query_id, query_text, embedding FROM user_queries WHERE embedding IS NOT NULL")
+    rows = cursor.fetchall()
+
+    if len(rows) < MIN_CLUSTER_SIZE:
         print()
-        print("No new queries to cluster.")
+        print(f"Only {len(rows)} embedded queries — need at least {MIN_CLUSTER_SIZE} to cluster.")
         conn.close()
         return
 
     print()
-    print(f"Found {len(unclustered_queries)} new queries.")
-    print("Starting clustering process.")
+    print(f"Clustering {len(rows)} queries.")
 
-    # 2. Embed the queries
-    query_texts = [q[1] for q in unclustered_queries]
-    embeddings_model = GoogleGenerativeAIEmbeddings(model="gemini-embedding-001")
+    ids = [r[0] for r in rows]
+    texts = [r[1] for r in rows]
+    vectors = np.array([json.loads(r[2]) for r in rows])
 
-    vectors = []
-    batch_size = 90
-    for i in range(0, len(query_texts), batch_size):
-        batch_texts = query_texts[i : i + batch_size]
-        print(f"Processing batch {i} to {i + len(batch_texts)}.")
-        batch_vectors = embeddings_model.embed_documents(batch_texts)
-        vectors.extend(batch_vectors)
+    # 3. Run HDBSCAN on L2-normalized vectors (euclidean distance on unit
+    #    vectors is monotonic with cosine distance). HDBSCAN finds the number
+    #    of clusters by itself and labels outliers as noise (-1).
+    print("Normalizing vectors and running HDBSCAN...")
+    normed = normalize(vectors)
+    clusterer = HDBSCAN(
+        min_cluster_size=MIN_CLUSTER_SIZE,
+        min_samples=MIN_SAMPLES,
+        metric='euclidean',
+    )
+    labels = clusterer.fit_predict(normed)
 
-        if i + batch_size < len(query_texts):
-            print("Approaching API limit. Sleeping for 60 seconds.")
-            time.sleep(60)
+    cluster_labels = sorted(set(labels) - {-1})
+    noise_count = int(np.sum(labels == -1))
+    print(f"HDBSCAN identified {len(cluster_labels)} clusters; "
+          f"{noise_count} queries left unclustered as noise.")
 
-    # 3. Perform Agglomerative Clustering
-    print("Normalizing vectors and running Agglomerative Clustering...")
-    normed = normalize(np.array(vectors))
-    k = _find_optimal_k(normed)
-    print(f"Elbow detection selected {k} clusters.")
-    agg = AgglomerativeClustering(n_clusters=k, metric='euclidean', linkage='ward')
-    labels = agg.fit_predict(normed)
+    # 4. Full rebuild: clear old clusters and assignments, then recreate.
+    cursor.execute("UPDATE user_queries SET cluster_id = NULL")
+    cursor.execute("DELETE FROM query_clusters")
+    try:
+        cursor.execute("DELETE FROM sqlite_sequence WHERE name='query_clusters'")
+    except sqlite3.OperationalError:
+        pass  # No AUTOINCREMENT counter yet
 
-    num_clusters = len(set(labels))
-    print(f"Algorithm produced {num_clusters} categories.")
+    if not cluster_labels:
+        conn.commit()
+        conn.close()
+        print("No clusters met the minimum size this run. Database updated.")
+        return
 
-    # 4. Load existing cluster centroids from the DB for cross-run merging
-    cursor.execute("SELECT cluster_id, centroid FROM query_clusters WHERE centroid IS NOT NULL")
-    existing_clusters = cursor.fetchall()
-    existing_centroids = []
-    for cid, blob in existing_clusters:
-        centroid = np.array(json.loads(blob))
-        existing_centroids.append((cid, centroid))
-
-    # 5. Use Gemini to name and save each new cluster
+    # 5. Name and persist each cluster
     llm = ChatGoogleGenerativeAI(model="gemini-2.5-flash", temperature=0)
 
-    for cluster_num in range(num_clusters):
-        cluster_indices = [i for i, label in enumerate(labels) if label == cluster_num]
-        cluster_questions = [query_texts[i] for i in cluster_indices]
-        cluster_vectors = normed[cluster_indices]
+    for label in cluster_labels:
+        member_indices = [i for i, lbl in enumerate(labels) if lbl == label]
+        questions = [texts[i] for i in member_indices]
 
-        # Skip clusters that are too small — leave those queries unclustered for next run
-        if len(cluster_questions) < MIN_CLUSTER_SIZE:
-            print(f"Skipping cluster {cluster_num} ({len(cluster_questions)} queries — below minimum size of {MIN_CLUSTER_SIZE})")
-            continue
+        cluster_name = _name_cluster(llm, questions)
+        print(f"Generated Cluster: {cluster_name} ({len(questions)} queries)")
 
-        # Compute this cluster's centroid
-        new_centroid = normalize(cluster_vectors.mean(axis=0, keepdims=True))[0]
+        cursor.execute(
+            "INSERT INTO query_clusters (cluster_name, cluster_summary) VALUES (?, ?)",
+            (cluster_name,
+             f"Automatically generated cluster containing {len(questions)} queries."),
+        )
+        new_cluster_id = cursor.lastrowid
 
-        # Check against existing cluster centroids (cross-run merging)
-        merged_into = None
-        for existing_id, existing_centroid in existing_centroids:
-            similarity = float(np.dot(new_centroid, existing_centroid))
-            if similarity >= MERGE_THRESHOLD:
-                merged_into = existing_id
-                print(f"Cluster {cluster_num} is similar to existing cluster {existing_id} (similarity={similarity:.2f}). Merging.")
-                break
-
-        if merged_into is not None:
-            # Assign queries to the existing cluster
-            for i in cluster_indices:
-                query_id = unclustered_queries[i][0]
-                cursor.execute("UPDATE user_queries SET cluster_id = ? WHERE query_id = ?", (merged_into, query_id))
-
-            # Update the existing cluster's centroid to include new data
-            cursor.execute("SELECT centroid FROM query_clusters WHERE cluster_id = ?", (merged_into,))
-            old_centroid = np.array(json.loads(cursor.fetchone()[0]))
-            updated_centroid = normalize(((old_centroid + new_centroid) / 2).reshape(1, -1))[0]
-            cursor.execute("UPDATE query_clusters SET centroid = ? WHERE cluster_id = ?",
-                           (json.dumps(updated_centroid.tolist()), merged_into))
-        else:
-            # Generate a name for the new cluster
-            prompt = f"Look at these questions asked by students: {cluster_questions}. What is a short, 2-3 word professional category name for these questions? (e.g., 'Financial Inquiries', 'Grading Policies'). Reply with ONLY the name."
-
-            cluster_name = "Unnamed Cluster"
-            max_retries = 3
-            for attempt in range(max_retries):
-                try:
-                    cluster_name = llm.invoke(prompt).content.strip()
-                    break
-                except Exception as e:
-                    print(f"API Server busy. Retrying in 10 seconds. (Attempt {attempt + 1}/{max_retries})")
-                    time.sleep(10)
-                    if attempt == max_retries - 1:
-                        print("Failed to get name from Gemini. Using default name.")
-
-            print(f"Generated Cluster: {cluster_name} ({len(cluster_questions)} queries)")
-
+        for i in member_indices:
             cursor.execute(
-                "INSERT INTO query_clusters (cluster_name, cluster_summary, centroid) VALUES (?, ?, ?)",
-                (cluster_name,
-                 f"Automatically generated cluster containing {len(cluster_questions)} queries.",
-                 json.dumps(new_centroid.tolist()))
+                "UPDATE user_queries SET cluster_id = ? WHERE query_id = ?",
+                (new_cluster_id, ids[i]),
             )
-            new_cluster_id = cursor.lastrowid
-
-            for i in cluster_indices:
-                query_id = unclustered_queries[i][0]
-                cursor.execute("UPDATE user_queries SET cluster_id = ? WHERE query_id = ?", (new_cluster_id, query_id))
-
-            existing_centroids.append((new_cluster_id, new_centroid))
 
     conn.commit()
     conn.close()
     print("Clustering complete and database updated.")
+
 
 if __name__ == "__main__":
     run_clustering()
