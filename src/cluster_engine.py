@@ -10,7 +10,6 @@ from sklearn.preprocessing import normalize
 from scipy.cluster.hierarchy import linkage as scipy_linkage
 
 load_dotenv()
-os.environ.setdefault("LANGCHAIN_TRACING_V2", "false")
 
 MIN_CLUSTER_SIZE = 3
 
