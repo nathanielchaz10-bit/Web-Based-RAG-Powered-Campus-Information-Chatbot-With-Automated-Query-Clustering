@@ -10,8 +10,8 @@ from sklearn.preprocessing import normalize
 
 load_dotenv()
 
-# Clusters smaller than this are treated as outliers and left unclustered
-# rather than shown as a tiny, noisy category on the dashboard.
+# Clusters smaller than this are left unclustered rather than shown as a
+# tiny, noisy category on the dashboard.
 MIN_CLUSTER_SIZE = 3
 
 EMBEDDING_MODEL = "gemini-embedding-001"
@@ -41,9 +41,9 @@ def _ensure_schema(conn, cursor):
 def _embed_missing_queries(conn, cursor):
     """Embed any queries with no cached vector yet and store them in the DB.
 
-    Embeddings are computed exactly once per query and cached, so re-running the
-    cluster engine never re-embeds the same text. This is what lets us safely
-    re-cluster every query from scratch on each run.
+    Embeddings are computed exactly once per query and cached, so re-running
+    the cluster engine never re-embeds the same text. task_type='CLUSTERING'
+    produces vectors optimised for grouping rather than general similarity.
     """
     cursor.execute("SELECT query_id, query_text FROM user_queries WHERE embedding IS NULL")
     rows = cursor.fetchall()
@@ -51,7 +51,7 @@ def _embed_missing_queries(conn, cursor):
         return
 
     print(f"Embedding {len(rows)} new queries (caching vectors to DB)...")
-    model = GoogleGenerativeAIEmbeddings(model=EMBEDDING_MODEL)
+    model = GoogleGenerativeAIEmbeddings(model=EMBEDDING_MODEL, task_type="CLUSTERING")
 
     ids = [r[0] for r in rows]
     texts = [r[1] for r in rows]
@@ -72,6 +72,29 @@ def _embed_missing_queries(conn, cursor):
         if i + batch_size < len(texts):
             print("Approaching API limit. Sleeping for 60 seconds.")
             time.sleep(60)
+
+
+def _flag_outliers(labels: np.ndarray, normed: np.ndarray) -> np.ndarray:
+    """Mark per-cluster outliers as -1 (unclustered).
+
+    Within each cluster, any query whose cosine distance to the cluster
+    centroid is more than 2 standard deviations above the cluster mean is
+    considered a poor fit and left unclustered instead of polluting the group.
+    The 2-std threshold is conservative enough to only remove genuine oddballs.
+    """
+    result = labels.copy()
+    for label in np.unique(labels):
+        indices = np.where(labels == label)[0]
+        if len(indices) < 2:
+            continue
+        centroid = normalize(normed[indices].mean(axis=0, keepdims=True))[0]
+        # cosine distance = 1 - cosine similarity (vectors are already L2-normed)
+        distances = 1.0 - normed[indices] @ centroid
+        threshold = distances.mean() + 2.0 * distances.std()
+        for idx, dist in zip(indices, distances):
+            if dist > threshold:
+                result[idx] = -1
+    return result
 
 
 def _name_cluster(llm, questions):
@@ -106,9 +129,8 @@ def run_clustering():
     # 1. Make sure every query has a cached embedding
     _embed_missing_queries(conn, cursor)
 
-    # 2. Load ALL queries that have an embedding — we re-cluster the full set
-    #    every run rather than incrementally merging, which avoids the stale
-    #    centroid problems of the old cross-run merge approach.
+    # 2. Load ALL queries — re-cluster the full set every run so there are no
+    #    stale centroids from previous runs to corrupt the results.
     cursor.execute("SELECT query_id, query_text, embedding FROM user_queries WHERE embedding IS NOT NULL")
     rows = cursor.fetchall()
 
@@ -121,35 +143,46 @@ def run_clustering():
     print()
     print(f"Clustering {len(rows)} queries.")
 
-    ids = [r[0] for r in rows]
+    ids   = [r[0] for r in rows]
     texts = [r[1] for r in rows]
     vectors = np.array([json.loads(r[2]) for r in rows])
 
-    # 3. Run Agglomerative Clustering on L2-normalized vectors (euclidean
-    #    distance on unit vectors is monotonic with cosine distance). The
-    #    number of clusters is chosen from the query count via the sqrt rule.
-    k = _choose_cluster_count(len(rows))
-    print(f"Normalizing vectors and running Agglomerative Clustering into {k} clusters...")
+    # 3. Mean-center then L2-normalize.
+    #    Gemini embeddings are anisotropic — all vectors lean in a broadly
+    #    similar direction — so subtracting the global mean before normalizing
+    #    spreads the space and sharpens cluster separation.
+    vectors -= vectors.mean(axis=0)
     normed = normalize(vectors)
+
+    # 4. Run Agglomerative Clustering.
+    k = _choose_cluster_count(len(rows))
+    print(f"Running Agglomerative Clustering into {k} clusters...")
     agg = AgglomerativeClustering(n_clusters=k, metric='euclidean', linkage='ward')
     labels = agg.fit_predict(normed)
 
-    # 4. Full rebuild: clear old clusters and assignments, then recreate.
+    # 5. Flag per-cluster outliers as unclustered (-1) so genuine oddballs
+    #    (e.g. a one-off question that doesn't fit any group) don't pollute a
+    #    cluster and confuse the LLM naming step.
+    labels = _flag_outliers(labels, normed)
+    outlier_count = int(np.sum(labels == -1))
+    if outlier_count:
+        print(f"Outlier removal: {outlier_count} queries left unclustered as poor fits.")
+
+    # 6. Full rebuild: wipe old clusters then recreate from scratch.
     cursor.execute("UPDATE user_queries SET cluster_id = NULL")
     cursor.execute("DELETE FROM query_clusters")
     try:
         cursor.execute("DELETE FROM sqlite_sequence WHERE name='query_clusters'")
     except sqlite3.OperationalError:
-        pass  # No AUTOINCREMENT counter yet
+        pass
 
-    # 5. Name and persist each cluster (skipping outlier-sized ones)
+    # 7. Name and persist each cluster (skip tiny ones)
     llm = ChatGoogleGenerativeAI(model="gemini-2.5-flash", temperature=0)
 
-    for label in sorted(set(labels)):
+    for label in sorted(set(labels) - {-1}):
         member_indices = [i for i, lbl in enumerate(labels) if lbl == label]
         questions = [texts[i] for i in member_indices]
 
-        # Leave tiny clusters unclustered rather than surfacing noisy categories
         if len(questions) < MIN_CLUSTER_SIZE:
             print(f"Skipping cluster {label} ({len(questions)} queries — below minimum size of {MIN_CLUSTER_SIZE})")
             continue
