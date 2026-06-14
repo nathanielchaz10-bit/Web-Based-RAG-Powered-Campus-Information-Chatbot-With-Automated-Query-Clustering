@@ -1,0 +1,167 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Query Clusters - HCCS Admin Portal</title>
+    <link rel="stylesheet" href="../css/admin.css">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body>
+    <div class="admin-layout">
+        <aside class="admin-sidebar">
+            <div class="sidebar-brand">
+                <h1>HCCS ADMIN PORTAL</h1>
+                <p>HOLY CHILD CATHOLIC SCHOOL</p>
+            </div>
+            <nav class="sidebar-nav">
+                <a href="dashboard.html" class="nav-item">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"></rect><rect x="14" y="3" width="7" height="7"></rect><rect x="14" y="14" width="7" height="7"></rect><rect x="3" y="14" width="7" height="7"></rect></svg>
+                    Dashboard Overview
+                </a>
+                <a href="#" class="nav-item active">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="18" cy="5" r="3"></circle><circle cx="6" cy="12" r="3"></circle><circle cx="18" cy="19" r="3"></circle><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"></line><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"></line></svg>
+                    Query Clusters
+                </a>
+                <a href="documents.html" class="nav-item">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path></svg>
+                    Document Directory
+                </a>
+                <a href="settings.html" class="nav-item">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>
+                    Settings
+                </a>
+            </nav>
+            <div class="sidebar-footer">
+                <a href="#" class="nav-item logout-btn">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path><polyline points="16 17 21 12 16 7"></polyline><line x1="21" y1="12" x2="9" y2="12"></line></svg>
+                    Logout
+                </a>
+            </div>
+        </aside>
+
+        <main class="admin-main">
+            <header class="top-header">
+                <div class="search-bar" style="width: 400px;">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#94a3b8" stroke-width="2"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+                    <input type="text" placeholder="Search clusters, documents, or student records...">
+                </div>
+
+                <div class="header-actions">
+                    <button class="icon-btn"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path><path d="M13.73 21a2 2 0 0 1-3.46 0"></path></svg></button>
+                    <button class="icon-btn"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"></path><line x1="12" y1="17" x2="12.01" y2="17"></line></svg></button>
+                    <div class="profile-block">
+                        <div class="profile-text">
+                            <span class="role">Admin_Maria</span>
+                            <span class="portal">HCCS Portal</span>
+                        </div>
+                        <div class="avatar-sm">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg>
+                        </div>
+                    </div>
+                </div>
+            </header>
+
+            <div class="content-wrapper">
+                <div class="page-title">
+                    <h2>Query Clusters & Analytics</h2>
+                    <p>Monitor student inquiry trends and AI sentiment resolution.</p>
+                </div>
+
+                <div class="analytics-top-grid" style="display: grid; grid-template-columns: 2fr 1fr; gap: 24px; margin-top: 24px;">
+                    <div class="dashboard-card chart-card" style="background: #fff; padding: 24px; border-radius: 12px; border: 1px solid #e2e8f0; height: 320px; position: relative;">
+                        <canvas id="topicChart"></canvas>
+                    </div>
+
+                    <div class="analytics-right-sidebar" style="display: flex; flex-direction: column; gap: 16px;">
+                        <div class="stat-card blue-card" style="background: #152e51; padding: 24px; border-radius: 12px; color: #fff;">
+                            <h2>2,482</h2>
+                            <p style="color: #10b981; font-size: 13px; font-weight: 600; margin-top: 4px;">▲ +12% from last week</p>
+                        </div>
+
+                        <div class="dashboard-card sentiment-card" style="background: #fff; padding: 24px; border-radius: 12px; border: 1px solid #e2e8f0;">
+                            <h4 style="font-size: 11px; font-weight: 700; color: #94a3b8; letter-spacing: 0.5px; margin-bottom: 16px; text-transform: uppercase;">Sentiment Distribution</h4>
+                            <div class="sentiment-rows-container">
+                                <div class="sentiment-row clickable-row">
+                                    <div style="display:flex; justify-content:space-between; font-size:13px; font-weight:600; margin-bottom:4px;"><span>Positive / Inquisitive</span><span>65%</span></div>
+                                    <div style="height:6px; background:#f1f5f9; border-radius:3px;"><div style="width:65%; height:100%; background:#10b981; border-radius:3px;"></div></div>
+                                </div>
+                                <div class="sentiment-row clickable-row" style="margin-top:16px;">
+                                    <div style="display:flex; justify-content:space-between; font-size:13px; font-weight:600; margin-bottom:4px;"><span>Neutral / Transactional</span><span>25%</span></div>
+                                    <div style="height:6px; background:#f1f5f9; border-radius:3px;"><div style="width:25%; height:100%; background:#3b82f6; border-radius:3px;"></div></div>
+                                </div>
+                                <div class="sentiment-row clickable-row" style="margin-top:16px;">
+                                    <div style="display:flex; justify-content:space-between; font-size:13px; font-weight:600; margin-bottom:4px; color:#ef4444;"><span>Urgent / Frustrated</span><span>10%</span></div>
+                                    <div style="height:6px; background:#f1f5f9; border-radius:3px;"><div style="width:10%; height:100%; background:#ef4444; border-radius:3px;"></div></div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div id="cluster-cards-container" style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 24px; margin-top: 24px;">
+                    </div>
+            </div>
+        </main>
+    </div>
+
+    <div id="sentiment-modal" class="ui-overlay hidden">
+        <div class="ui-modal-content">
+            <div class="modal-header">
+                <h3>Urgent / Frustrated Drivers</h3>
+                <button class="icon-btn close-ui-btn">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+                </button>
+            </div>
+            <div class="modal-body">
+                <p class="modal-desc">Top AI-extracted reasons driving negative sentiment for this period.</p>
+                <ul class="driver-list">
+                    <li><span class="driver-title">Cashier long lines</span><span class="driver-count">45 queries</span></li>
+                    <li><span class="driver-title">Student Portal login errors</span><span class="driver-count">30 queries</span></li>
+                    <li><span class="driver-title">Missing grades in system</span><span class="driver-count">12 queries</span></li>
+                </ul>
+            </div>
+        </div>
+    </div>
+
+                <div id="queries-modal" class="ui-overlay hidden">
+            <div class="ui-modal-content wide-modal">
+                <div class="modal-header extended-header">
+                    <div>
+                        <h3>Raw Queries: Scholarship Guidelines</h3>
+                        <p class="modal-subtitle">Showing recent student inputs mapped to this cluster.</p>
+                    </div>
+                    <div class="header-actions-row">
+                        <div class="modal-toggle-group">
+                            <button class="toggle-btn active" data-filter="all">All Queries</button>
+                            <button class="toggle-btn" data-filter="low">Low Confidence Only</button>
+                        </div>
+                        <button class="icon-btn close-ui-btn">&times;</button>
+                    </div>
+                </div>
+
+                <div class="modal-body scrollable-body">
+                    <div class="query-card">
+                        <div class="query-meta">
+                            <span class="timestamp">TODAY, 10:42 AM</span>
+                            <span class="conf-badge high">• High Confidence (0.92)</span>
+                        </div>
+                        <p class="student-prompt">"What is the exact GWA needed?"</p>
+                        <p class="ai-response">AI Snippet: "To maintain the academic scholarship, you must have a GWA of 1.75..."</p>
+                        <div class="source-tag">📄 SOURCE: HANDBOOK_2025.DOCX</div>
+                    </div>
+                </div>
+
+                <div class="modal-footer-custom">
+                    <span style="color: #10b981; font-weight: 600;">● NLP PROCESSOR LIVE (0.45s LATENCY)</span>
+                    <div>
+                        <button class="outline-btn-sm" style="margin-right: 10px;">Download Log</button>
+                        <button class="solid-btn-sm" style="background: #7f1d1d;">Export to Ticket</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+    <script src="../js/admin/clusters.js"></script>
+</body>
+</html>
