@@ -13,6 +13,12 @@ load_dotenv()
 
 MIN_CLUSTER_SIZE = 3
 
+# Cross-run merge bar. Gemini text embeddings are anisotropic (all vectors
+# point in a broadly similar direction), so baseline cosine similarity between
+# any two centroids is already high. Keep this strict so only genuinely
+# near-identical topics fold into an existing cluster.
+MERGE_THRESHOLD = 0.95
+
 def _find_optimal_k(normed: np.ndarray) -> int:
     """Pick k via the acceleration (elbow) of ward merge distances."""
     n = len(normed)
@@ -112,7 +118,6 @@ def run_clustering():
 
         # Check against existing cluster centroids (cross-run merging)
         merged_into = None
-        MERGE_THRESHOLD = 0.85
         for existing_id, existing_centroid in existing_centroids:
             similarity = float(np.dot(new_centroid, existing_centroid))
             if similarity >= MERGE_THRESHOLD:
