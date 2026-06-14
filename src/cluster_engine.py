@@ -20,11 +20,12 @@ EMBEDDING_MODEL = "gemini-embedding-001"
 def _choose_cluster_count(n: int) -> int:
     """Pick how many clusters to form from the number of queries.
 
-    Uses the sqrt heuristic (n_clusters ~= sqrt(n)), which scales smoothly as
-    query volume grows: 41 queries -> 6 clusters, 100 -> 10, 9 -> 3. This is
-    far more predictable than elbow detection and needs no threshold tuning.
+    Uses a scaled sqrt heuristic (n_clusters ~= 1.5 * sqrt(n)), which scales
+    smoothly as query volume grows: 41 queries -> 10 clusters, 100 -> 15,
+    9 -> 5. The 1.5 multiplier yields finer-grained clusters; raise it for
+    more clusters, lower it for fewer.
     """
-    return max(3, min(n, round(np.sqrt(n))))
+    return max(3, min(n, round(np.sqrt(n) * 1.5)))
 
 
 def _ensure_schema(conn, cursor):
