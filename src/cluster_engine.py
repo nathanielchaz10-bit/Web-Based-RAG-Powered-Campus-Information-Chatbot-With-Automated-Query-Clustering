@@ -1,31 +1,27 @@
 import sqlite3
 import os
+import re
 import time
 import json
 import numpy as np
 from dotenv import load_dotenv
 from langchain_google_genai import GoogleGenerativeAIEmbeddings, ChatGoogleGenerativeAI
-from sklearn.cluster import AgglomerativeClustering
 from sklearn.preprocessing import normalize
 
 load_dotenv()
 
-# Clusters smaller than this are left unclustered rather than shown as a
-# tiny, noisy category on the dashboard.
+# Final clusters with fewer than this many queries are treated as one-off
+# noise and left unclustered instead of cluttering the dashboard.
 MIN_CLUSTER_SIZE = 3
 
+# Two queries whose embeddings are at least this cosine-similar are treated as
+# near-duplicates and collapsed to a single representative before the LLM step.
+# Kept high so only genuine paraphrases ("what is the tuition" / "how much is
+# tuition") merge — distinct questions are left for the LLM to judge.
+DEDUP_THRESHOLD = 0.95
+
 EMBEDDING_MODEL = "gemini-embedding-001"
-
-
-def _choose_cluster_count(n: int) -> int:
-    """Pick how many clusters to form from the number of queries.
-
-    Uses a scaled sqrt heuristic (n_clusters ~= 1.5 * sqrt(n)), which scales
-    smoothly as query volume grows: 41 queries -> 10 clusters, 100 -> 15,
-    9 -> 5. The 1.5 multiplier yields finer-grained clusters; raise it for
-    more clusters, lower it for fewer.
-    """
-    return max(3, min(n, round(np.sqrt(n) * 1.5)))
+LLM_MODEL = "gemini-2.5-flash"
 
 
 def _ensure_schema(conn, cursor):
@@ -41,9 +37,9 @@ def _ensure_schema(conn, cursor):
 def _embed_missing_queries(conn, cursor):
     """Embed any queries with no cached vector yet and store them in the DB.
 
-    Embeddings are computed exactly once per query and cached, so re-running
-    the cluster engine never re-embeds the same text. task_type='CLUSTERING'
-    produces vectors optimised for grouping rather than general similarity.
+    Embeddings here are only used to collapse near-duplicate queries before the
+    LLM grouping step (keeping the prompt small and cheap). They are computed
+    once per query and cached, so re-running never re-embeds the same text.
     """
     cursor.execute("SELECT query_id, query_text FROM user_queries WHERE embedding IS NULL")
     rows = cursor.fetchall()
@@ -74,45 +70,72 @@ def _embed_missing_queries(conn, cursor):
             time.sleep(60)
 
 
-def _flag_outliers(labels: np.ndarray, normed: np.ndarray) -> np.ndarray:
-    """Mark per-cluster outliers as -1 (unclustered).
+def _deduplicate(normed: np.ndarray):
+    """Greedily group near-duplicate queries by cosine similarity.
 
-    Within each cluster, any query whose cosine distance to the cluster
-    centroid is more than 2 standard deviations above the cluster mean is
-    considered a poor fit and left unclustered instead of polluting the group.
-    The 2-std threshold is conservative enough to only remove genuine oddballs.
+    Returns a list of groups, each a list of original row indices. The first
+    index in each group is its representative — the one query actually shown to
+    the LLM. O(n^2), which is fine for the hundreds-to-low-thousands of queries
+    a campus chatbot realistically accumulates.
     """
-    result = labels.copy()
-    for label in np.unique(labels):
-        indices = np.where(labels == label)[0]
-        if len(indices) < 2:
+    n = len(normed)
+    sim = normed @ normed.T
+    assigned = [False] * n
+    groups = []
+    for i in range(n):
+        if assigned[i]:
             continue
-        centroid = normalize(normed[indices].mean(axis=0, keepdims=True))[0]
-        # cosine distance = 1 - cosine similarity (vectors are already L2-normed)
-        distances = 1.0 - normed[indices] @ centroid
-        threshold = distances.mean() + 2.0 * distances.std()
-        for idx, dist in zip(indices, distances):
-            if dist > threshold:
-                result[idx] = -1
-    return result
+        group = [i]
+        assigned[i] = True
+        for j in range(i + 1, n):
+            if not assigned[j] and sim[i, j] >= DEDUP_THRESHOLD:
+                assigned[j] = True
+                group.append(j)
+        groups.append(group)
+    return groups
 
 
-def _name_cluster(llm, questions):
-    """Ask Gemini for a short category name, with retries on transient errors."""
+def _llm_cluster(llm, rep_texts):
+    """Ask the LLM to organize representative queries into named topic groups.
+
+    Returns a list of {"name": str, "members": [int, ...]} dicts where members
+    are indices into rep_texts. Retries on transient errors / bad JSON.
+    """
+    numbered = "\n".join(f"{i}: {t}" for i, t in enumerate(rep_texts))
     prompt = (
-        f"Look at these questions asked by students: {questions}. "
-        "What is a short, 2-3 word professional category name for these questions? "
-        "(e.g., 'Financial Inquiries', 'Grading Policies'). Reply with ONLY the name."
+        "You are organizing questions students asked a campus information "
+        "chatbot into topic categories for an analytics dashboard.\n\n"
+        "Here is a numbered list of questions:\n"
+        f"{numbered}\n\n"
+        "Group them into clear, distinct topic categories based on what the "
+        "student actually wants (their intent), not just shared keywords. "
+        "Keep closely related questions together — for example, all questions "
+        "about paying tuition (methods, installments, discounts, failed "
+        "payments) belong in ONE payments category. Every question must be "
+        "placed in exactly one category. Give each category a short, "
+        "professional 2-3 word name (e.g. 'Payment Inquiries', 'Enrollment "
+        "Process', 'Campus Facilities').\n\n"
+        "Reply with ONLY valid JSON, no markdown, in exactly this format:\n"
+        '[{"name": "Category Name", "members": [0, 3, 5]}, ...]'
     )
+
     max_retries = 3
     for attempt in range(max_retries):
         try:
-            return llm.invoke(prompt).content.strip()
+            raw = llm.invoke(prompt).content.strip()
+            # Strip ```json ... ``` fences if the model added them
+            raw = re.sub(r"^```(?:json)?\s*|\s*```$", "", raw, flags=re.IGNORECASE).strip()
+            groups = json.loads(raw)
+            if isinstance(groups, list):
+                return groups
+            print("LLM returned unexpected JSON shape. Retrying.")
+        except json.JSONDecodeError:
+            print(f"Could not parse LLM response as JSON. Retrying. (Attempt {attempt + 1}/{max_retries})")
         except Exception:
             print(f"API Server busy. Retrying in 10 seconds. (Attempt {attempt + 1}/{max_retries})")
             time.sleep(10)
-    print("Failed to get name from Gemini. Using default name.")
-    return "Unnamed Cluster"
+    print("Failed to get a valid grouping from the LLM.")
+    return []
 
 
 def run_clustering():
@@ -126,11 +149,10 @@ def run_clustering():
 
     _ensure_schema(conn, cursor)
 
-    # 1. Make sure every query has a cached embedding
+    # 1. Make sure every query has a cached embedding (for dedup only)
     _embed_missing_queries(conn, cursor)
 
-    # 2. Load ALL queries — re-cluster the full set every run so there are no
-    #    stale centroids from previous runs to corrupt the results.
+    # 2. Load ALL queries — we regroup the full set every run.
     cursor.execute("SELECT query_id, query_text, embedding FROM user_queries WHERE embedding IS NOT NULL")
     rows = cursor.fetchall()
 
@@ -143,32 +165,29 @@ def run_clustering():
     print()
     print(f"Clustering {len(rows)} queries.")
 
-    ids   = [r[0] for r in rows]
-    texts = [r[1] for r in rows]
+    ids     = [r[0] for r in rows]
+    texts   = [r[1] for r in rows]
     vectors = np.array([json.loads(r[2]) for r in rows])
+    normed  = normalize(vectors)
 
-    # 3. Mean-center then L2-normalize.
-    #    Gemini embeddings are anisotropic — all vectors lean in a broadly
-    #    similar direction — so subtracting the global mean before normalizing
-    #    spreads the space and sharpens cluster separation.
-    vectors -= vectors.mean(axis=0)
-    normed = normalize(vectors)
+    # 3. Collapse near-duplicate queries so the LLM sees each distinct question
+    #    once. Each group's first member is its representative.
+    dup_groups = _deduplicate(normed)
+    rep_indices = [g[0] for g in dup_groups]
+    rep_texts = [texts[i] for i in rep_indices]
+    print(f"Deduplicated {len(rows)} queries down to {len(rep_texts)} distinct ones.")
 
-    # 4. Run Agglomerative Clustering.
-    k = _choose_cluster_count(len(rows))
-    print(f"Running Agglomerative Clustering into {k} clusters...")
-    agg = AgglomerativeClustering(n_clusters=k, metric='euclidean', linkage='ward')
-    labels = agg.fit_predict(normed)
+    # 4. Let the LLM organize the representatives into topic groups by intent.
+    print(f"Asking {LLM_MODEL} to group queries by topic...")
+    llm = ChatGoogleGenerativeAI(model=LLM_MODEL, temperature=0)
+    llm_groups = _llm_cluster(llm, rep_texts)
 
-    # 5. Flag per-cluster outliers as unclustered (-1) so genuine oddballs
-    #    (e.g. a one-off question that doesn't fit any group) don't pollute a
-    #    cluster and confuse the LLM naming step.
-    labels = _flag_outliers(labels, normed)
-    outlier_count = int(np.sum(labels == -1))
-    if outlier_count:
-        print(f"Outlier removal: {outlier_count} queries left unclustered as poor fits.")
+    if not llm_groups:
+        print("No grouping produced; leaving database unchanged.")
+        conn.close()
+        return
 
-    # 6. Full rebuild: wipe old clusters then recreate from scratch.
+    # 5. Full rebuild: wipe old clusters then recreate from the LLM grouping.
     cursor.execute("UPDATE user_queries SET cluster_id = NULL")
     cursor.execute("DELETE FROM query_clusters")
     try:
@@ -176,31 +195,36 @@ def run_clustering():
     except sqlite3.OperationalError:
         pass
 
-    # 7. Name and persist each cluster (skip tiny ones)
-    llm = ChatGoogleGenerativeAI(model="gemini-2.5-flash", temperature=0)
+    for group in llm_groups:
+        name = str(group.get("name", "")).strip() or "Unnamed Cluster"
+        members = group.get("members", [])
 
-    for label in sorted(set(labels) - {-1}):
-        member_indices = [i for i, lbl in enumerate(labels) if lbl == label]
-        questions = [texts[i] for i in member_indices]
+        # Expand each representative back to all its near-duplicate originals,
+        # collecting the real query_ids that belong to this topic.
+        member_query_ids = []
+        for rep_pos in members:
+            if not isinstance(rep_pos, int) or not (0 <= rep_pos < len(dup_groups)):
+                continue  # ignore hallucinated / out-of-range indices
+            for original_idx in dup_groups[rep_pos]:
+                member_query_ids.append(ids[original_idx])
 
-        if len(questions) < MIN_CLUSTER_SIZE:
-            print(f"Skipping cluster {label} ({len(questions)} queries — below minimum size of {MIN_CLUSTER_SIZE})")
+        # Leave tiny topics unclustered rather than surfacing noise
+        if len(member_query_ids) < MIN_CLUSTER_SIZE:
+            print(f"Skipping '{name}' ({len(member_query_ids)} queries — below minimum size of {MIN_CLUSTER_SIZE})")
             continue
 
-        cluster_name = _name_cluster(llm, questions)
-        print(f"Generated Cluster: {cluster_name} ({len(questions)} queries)")
-
+        print(f"Generated Cluster: {name} ({len(member_query_ids)} queries)")
         cursor.execute(
             "INSERT INTO query_clusters (cluster_name, cluster_summary) VALUES (?, ?)",
-            (cluster_name,
-             f"Automatically generated cluster containing {len(questions)} queries."),
+            (name,
+             f"Automatically generated cluster containing {len(member_query_ids)} queries."),
         )
         new_cluster_id = cursor.lastrowid
 
-        for i in member_indices:
+        for qid in member_query_ids:
             cursor.execute(
                 "UPDATE user_queries SET cluster_id = ? WHERE query_id = ?",
-                (new_cluster_id, ids[i]),
+                (new_cluster_id, qid),
             )
 
     conn.commit()
