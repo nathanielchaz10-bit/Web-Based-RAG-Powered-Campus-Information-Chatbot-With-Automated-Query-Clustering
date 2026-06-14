@@ -5,21 +5,26 @@ import json
 import numpy as np
 from dotenv import load_dotenv
 from langchain_google_genai import GoogleGenerativeAIEmbeddings, ChatGoogleGenerativeAI
-from sklearn.cluster import HDBSCAN
+from sklearn.cluster import AgglomerativeClustering
 from sklearn.preprocessing import normalize
 
 load_dotenv()
 
-# Smallest group HDBSCAN will treat as a real cluster. Queries that don't fall
-# into any cluster this size are labelled noise (-1) and left unclustered.
+# Clusters smaller than this are treated as outliers and left unclustered
+# rather than shown as a tiny, noisy category on the dashboard.
 MIN_CLUSTER_SIZE = 3
 
-# How conservative HDBSCAN is about declaring noise. Lower = fewer points
-# dropped as noise, which suits the small query volumes a campus chatbot sees
-# early on. 1 is the least conservative setting.
-MIN_SAMPLES = 1
-
 EMBEDDING_MODEL = "gemini-embedding-001"
+
+
+def _choose_cluster_count(n: int) -> int:
+    """Pick how many clusters to form from the number of queries.
+
+    Uses the sqrt heuristic (n_clusters ~= sqrt(n)), which scales smoothly as
+    query volume grows: 41 queries -> 6 clusters, 100 -> 10, 9 -> 3. This is
+    far more predictable than elbow detection and needs no threshold tuning.
+    """
+    return max(3, min(n, round(np.sqrt(n))))
 
 
 def _ensure_schema(conn, cursor):
@@ -119,22 +124,14 @@ def run_clustering():
     texts = [r[1] for r in rows]
     vectors = np.array([json.loads(r[2]) for r in rows])
 
-    # 3. Run HDBSCAN on L2-normalized vectors (euclidean distance on unit
-    #    vectors is monotonic with cosine distance). HDBSCAN finds the number
-    #    of clusters by itself and labels outliers as noise (-1).
-    print("Normalizing vectors and running HDBSCAN...")
+    # 3. Run Agglomerative Clustering on L2-normalized vectors (euclidean
+    #    distance on unit vectors is monotonic with cosine distance). The
+    #    number of clusters is chosen from the query count via the sqrt rule.
+    k = _choose_cluster_count(len(rows))
+    print(f"Normalizing vectors and running Agglomerative Clustering into {k} clusters...")
     normed = normalize(vectors)
-    clusterer = HDBSCAN(
-        min_cluster_size=MIN_CLUSTER_SIZE,
-        min_samples=MIN_SAMPLES,
-        metric='euclidean',
-    )
-    labels = clusterer.fit_predict(normed)
-
-    cluster_labels = sorted(set(labels) - {-1})
-    noise_count = int(np.sum(labels == -1))
-    print(f"HDBSCAN identified {len(cluster_labels)} clusters; "
-          f"{noise_count} queries left unclustered as noise.")
+    agg = AgglomerativeClustering(n_clusters=k, metric='euclidean', linkage='ward')
+    labels = agg.fit_predict(normed)
 
     # 4. Full rebuild: clear old clusters and assignments, then recreate.
     cursor.execute("UPDATE user_queries SET cluster_id = NULL")
@@ -144,18 +141,17 @@ def run_clustering():
     except sqlite3.OperationalError:
         pass  # No AUTOINCREMENT counter yet
 
-    if not cluster_labels:
-        conn.commit()
-        conn.close()
-        print("No clusters met the minimum size this run. Database updated.")
-        return
-
-    # 5. Name and persist each cluster
+    # 5. Name and persist each cluster (skipping outlier-sized ones)
     llm = ChatGoogleGenerativeAI(model="gemini-2.5-flash", temperature=0)
 
-    for label in cluster_labels:
+    for label in sorted(set(labels)):
         member_indices = [i for i, lbl in enumerate(labels) if lbl == label]
         questions = [texts[i] for i in member_indices]
+
+        # Leave tiny clusters unclustered rather than surfacing noisy categories
+        if len(questions) < MIN_CLUSTER_SIZE:
+            print(f"Skipping cluster {label} ({len(questions)} queries — below minimum size of {MIN_CLUSTER_SIZE})")
+            continue
 
         cluster_name = _name_cluster(llm, questions)
         print(f"Generated Cluster: {cluster_name} ({len(questions)} queries)")
