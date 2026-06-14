@@ -44,7 +44,7 @@ def run_rag_pipeline():
     docs_path = os.path.join(base_dir, 'docs')
 
     # set up the embedding model
-    embeddings = GoogleGenerativeAIEmbeddings(model="gemini-embedding-2", task_type=None)
+    embeddings = GoogleGenerativeAIEmbeddings(model="gemini-embedding-001", task_type=None)
 
     if os.path.exists(chroma_db_path):
         print()
