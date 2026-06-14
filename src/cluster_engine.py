@@ -7,12 +7,29 @@ from dotenv import load_dotenv
 from langchain_google_genai import GoogleGenerativeAIEmbeddings, ChatGoogleGenerativeAI
 from sklearn.cluster import AgglomerativeClustering
 from sklearn.preprocessing import normalize
+from scipy.cluster.hierarchy import linkage as scipy_linkage
 
 load_dotenv()
+os.environ.setdefault("LANGCHAIN_TRACING_V2", "false")
 
 MIN_CLUSTER_SIZE = 3
 
-def run_clustering(distance_threshold=1.5):
+def _find_optimal_k(normed: np.ndarray) -> int:
+    """Pick k via the acceleration (elbow) of ward merge distances."""
+    n = len(normed)
+    if n <= 2:
+        return n
+    Z = scipy_linkage(normed, method='ward', metric='euclidean')
+    dists = Z[:, 2]
+    if len(dists) < 3:
+        return max(2, n // 6)
+    accel = np.diff(dists, 2)
+    # The biggest jump in acceleration marks the natural elbow
+    k = int(accel[::-1].argmax()) + 2
+    # Clamp: at least 2 clusters, at most n//3
+    return max(2, min(k, max(2, n // 3)))
+
+def run_clustering():
     base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     db_path = os.path.join(base_dir, 'analytics.db')
 
@@ -62,14 +79,13 @@ def run_clustering(distance_threshold=1.5):
     # 3. Perform Agglomerative Clustering
     print("Normalizing vectors and running Agglomerative Clustering...")
     normed = normalize(np.array(vectors))
-    agg = AgglomerativeClustering(n_clusters=None,
-                                  distance_threshold=distance_threshold,
-                                  metric='euclidean',
-                                  linkage='ward')
+    k = _find_optimal_k(normed)
+    print(f"Elbow detection selected {k} clusters.")
+    agg = AgglomerativeClustering(n_clusters=k, metric='euclidean', linkage='ward')
     labels = agg.fit_predict(normed)
 
     num_clusters = len(set(labels))
-    print(f"Algorithm dynamically identified {num_clusters} distinct categories.")
+    print(f"Algorithm produced {num_clusters} categories.")
 
     # 4. Load existing cluster centroids from the DB for cross-run merging
     cursor.execute("SELECT cluster_id, centroid FROM query_clusters WHERE centroid IS NOT NULL")
