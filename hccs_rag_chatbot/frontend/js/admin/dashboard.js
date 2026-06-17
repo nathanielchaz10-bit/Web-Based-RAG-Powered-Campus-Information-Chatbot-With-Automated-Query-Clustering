@@ -19,6 +19,14 @@ document.addEventListener("DOMContentLoaded", async () => {
 
 
 function renderSidebar(user) {
+    // dashboard.html already ships a complete, styled static sidebar and has no
+    // element with id="sidebar", so there is nothing to populate here. Without
+    // this guard, getElementById returns null and the .innerHTML assignment
+    // throws, which aborts the rest of DOMContentLoaded — leaving every KPI
+    // card, chart and the recent-inquiries table empty.
+    const sidebar = document.getElementById("sidebar");
+    if (!sidebar) return;
+
     const initials = user.display_name
         .split(" ")
         .map(n => n[0])
@@ -26,7 +34,7 @@ function renderSidebar(user) {
         .toUpperCase()
         .slice(0, 2);
 
-    document.getElementById("sidebar").innerHTML = `
+    sidebar.innerHTML = `
         <div class="sidebar-brand">
             <p class="sidebar-brand-title">HCCS Admin Portal</p>
             <p class="sidebar-brand-sub">Holy Child Catholic School</p>
