@@ -40,11 +40,17 @@ def _is_transient_error(exc: BaseException) -> bool:
     return any(marker in msg for marker in _TRANSIENT_MARKERS)
 
 
+def _log_retry(retry_state):
+    exc = retry_state.outcome.exception()
+    print(f"[embedding retry] attempt {retry_state.attempt_number} failed: {exc!r} — retrying...")
+
+
 # Retry a few times with exponential backoff (2s, 4s, 8s, capped at 10s).
 _embedding_retry = retry(
     retry=retry_if_exception(_is_transient_error),
     wait=wait_exponential(multiplier=2, min=2, max=10),
     stop=stop_after_attempt(4),
+    before_sleep=_log_retry,
     reraise=True,
 )
 

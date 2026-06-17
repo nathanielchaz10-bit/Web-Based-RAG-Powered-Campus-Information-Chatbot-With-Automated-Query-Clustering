@@ -9,6 +9,7 @@ stays history-aware without trusting client-supplied history.
 """
 
 import json
+import traceback
 from datetime import datetime
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -92,6 +93,12 @@ def chat(
     try:
         result = rag_service.answer_query(message, history)
     except Exception as exc:
+        # Print the FULL traceback to the server console so we can see the real
+        # root cause (not just the short message the user sees).
+        print("\n=== /chat failed — full traceback ===")
+        traceback.print_exc()
+        print(f"history turns fed to retriever: {len(history)}")
+        print("=== end traceback ===\n")
         # Most likely: missing GEMINI_API_KEY or no documents to index yet.
         raise HTTPException(
             status_code=503,
