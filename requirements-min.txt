@@ -41,3 +41,9 @@ langchain-text-splitters==1.1.2
 # --- Document loaders used by src/rag_engine.py ---
 pypdf==6.10.2
 docx2txt==0.9
+
+# --- Local NLP enrichment (sentiment/intent on each query) ---
+# Pure-Python, rule-based, no model download. Optional at runtime: the chat
+# router degrades to neutral sentiment if this is absent, but install it to
+# populate QueryLog.sentiment for the admin sentiment-distribution view.
+vaderSentiment==3.3.2

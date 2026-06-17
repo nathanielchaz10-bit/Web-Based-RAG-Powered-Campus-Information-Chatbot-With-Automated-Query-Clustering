@@ -23,11 +23,28 @@ from app.models.chat_response import ChatResponse
 from app.models.query_log import QueryLog
 from app.models.user_account import UserAccount
 from app.services.rag import rag_service
+# Lightweight, local (zero-API-cost) NLP enrichment. These modules import
+# cleanly even if their optional dependency (vaderSentiment) is missing.
+from app.services.nlp.sentiment import classify_sentiment
+from app.services.nlp.intent import classify_intent
 
 router = APIRouter(prefix="/chat", tags=["Chat"])
 
 # How many prior turns to feed back into the retriever as context.
 _HISTORY_TURNS = 10
+
+
+def _classify(message: str) -> tuple[str | None, str | None]:
+    """Run local sentiment + intent classification, never raising.
+
+    Enrichment is a nice-to-have stored alongside each QueryLog; if it fails
+    for any reason it must not break the student's chat turn, so we swallow
+    errors and fall back to None (column stays NULL).
+    """
+    try:
+        return classify_sentiment(message), classify_intent(message)
+    except Exception:  # pragma: no cover - defensive; classifiers are pure
+        return None, None
 
 
 class ChatRequest(BaseModel):
@@ -105,12 +122,16 @@ def chat(
             detail=f"The assistant is not available right now: {exc}",
         )
 
+    sentiment, detected_intent = _classify(message)
+
     query = QueryLog(
         query_text=message,
         session_id=session.session_id,
         timestamp=datetime.utcnow(),
         response_time_ms=result["response_time_ms"],
         is_valid=True,
+        sentiment=sentiment,
+        detected_intent=detected_intent,
     )
     db.add(query)
     db.flush()  # assign query_id

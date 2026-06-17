@@ -229,8 +229,14 @@ function intentClass(intent) {
 
 function sentimentClass(sentiment) {
     const map = {
+        // Labels produced by app/services/nlp/sentiment.py
+        "Positive / Inquisitive": "sentiment-positive",
+        "Neutral / Transactional": "sentiment-neutral",
+        "Urgent / Frustrated": "sentiment-urgent",
+        // Short-form fallbacks (e.g. the API's "Neutral" default when a row
+        // pre-dates NLP enrichment and has no stored sentiment).
         "Positive": "sentiment-positive",
-        "Negative": "sentiment-negative",
+        "Negative": "sentiment-urgent",
         "Neutral": "sentiment-neutral"
     };
     return map[sentiment] || "sentiment-neutral";
