@@ -1,53 +1,71 @@
+from pathlib import Path
+from pydantic_settings import BaseSettings, SettingsConfigDict
+
+# ---------------------------------------------------------------------------
+# Path anchors (CWD-independent)
+# config.py lives at: <repo>/hccs_rag_chatbot/app/core/config.py
+#   parents[2] -> <repo>/hccs_rag_chatbot   (the app root, holds database/)
+#   parents[3] -> <repo>                     (repo root, holds docs/, src/, chroma_db/)
+# ---------------------------------------------------------------------------
+APP_ROOT = Path(__file__).resolve().parents[2]
+REPO_ROOT = Path(__file__).resolve().parents[3]
 
 
-from pydantic_settings import BaseSettings
-
-# placeholder
 class Settings(BaseSettings):
+    """Central configuration.
 
-    # Google OAuth
-    GOOGLE_CLIENT_ID: str
-    GOOGLE_CLIENT_SECRET: str
-    GOOGLE_REDIRECT_URI: str
-    HCCS_DOMAIN: str
+    Every field now has a sensible default so the FastAPI app boots even when
+    .env is incomplete (e.g. during local testing / demos). Fill .env in for
+    real Google OAuth + your own Gemini key. See .env.example for the full list.
+    """
 
-    # Gemini API
-    GEMINI_API_KEY: str
-    EMBEDDING_MODEL: str
-    LLM_MODEL: str
+    # --- Google OAuth (only needed for the real Google login path) ----------
+    GOOGLE_CLIENT_ID: str = ""
+    GOOGLE_CLIENT_SECRET: str = ""
+    GOOGLE_REDIRECT_URI: str = "http://localhost:8000/api/auth/callback"
+    HCCS_DOMAIN: str = "hccs.edu.ph"
 
-    # Database
-    SQLITE_DB_PATH: str
-    CHROMA_DB_PATH: str
+    # --- Gemini / LLM -------------------------------------------------------
+    GEMINI_API_KEY: str = ""
+    EMBEDDING_MODEL: str = "gemini-embedding-001"
+    LLM_MODEL: str = "gemini-2.5-flash"
 
-    # Security
-    JWT_SECRET_KEY: str
-    JWT_ALGORITHM: str
-    JWT_EXPIRE_MINUTES: int
+    # --- Database -----------------------------------------------------------
+    # Absolute paths by default so the app works no matter where it's launched.
+    SQLITE_DB_PATH: str = str(APP_ROOT / "database" / "hccs_rag.db")
+    CHROMA_DB_PATH: str = str(REPO_ROOT / "chroma_db")
 
-    # RAG Configuration
-    TOP_K_CHUNKS: int
-    CHUNK_SIZE: int
-    CHUNK_OVERLAP: int
-    RELEVANCE_THRESHOLD: float
-    RAG_TEMPERATURE: float
-    MAX_CONTEXT_TOKENS: int
+    # --- Security / JWT -----------------------------------------------------
+    JWT_SECRET_KEY: str = "dev-secret-change-me-in-production"
+    JWT_ALGORITHM: str = "HS256"
+    JWT_EXPIRE_MINUTES: int = 60
 
-    # Rate Limiting
-    RATE_LIMIT_MAX_REQUESTS: int
-    RATE_LIMIT_WINDOW_SECONDS: int
+    # --- RAG configuration (mirror src/rag_engine.py where known) -----------
+    TOP_K_CHUNKS: int = 5
+    CHUNK_SIZE: int = 1000
+    CHUNK_OVERLAP: int = 200
+    RELEVANCE_THRESHOLD: float = 0.7
+    RAG_TEMPERATURE: float = 0.0
+    MAX_CONTEXT_TOKENS: int = 4000
 
-    # Clustering
-    CLUSTERING_MIN_QUERIES: int
-    CLUSTERING_SCHEDULE_HOUR: int
+    # --- Rate limiting ------------------------------------------------------
+    RATE_LIMIT_MAX_REQUESTS: int = 20
+    RATE_LIMIT_WINDOW_SECONDS: int = 60
 
-    # Development Mode
-    # Set to True during development and demo
-    # Set to False in production to enforce HCCS domain restriction
+    # --- Clustering (mirror src/cluster_engine.py) --------------------------
+    CLUSTERING_MIN_QUERIES: int = 3
+    CLUSTERING_SCHEDULE_HOUR: int = 2
+
+    # --- Development Mode ----------------------------------------------------
+    # True during development/demo: enables the dev-login bypass and relaxes the
+    # HCCS domain restriction. Set False in production.
     DEV_MODE: bool = True
 
-    class Config:
-        env_file = ".env"
-        env_file_encoding = "utf-8"
+    model_config = SettingsConfigDict(
+        env_file=str(REPO_ROOT / ".env"),
+        env_file_encoding="utf-8",
+        extra="ignore",
+    )
+
 
 settings = Settings()

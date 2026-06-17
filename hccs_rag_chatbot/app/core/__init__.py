@@ -1,33 +1,9 @@
+"""Core package.
 
-from sqlalchemy import create_engine
-from sqlalchemy.orm import sessionmaker, declarative_base
-from app.core.config import settings
-
-
-engine = create_engine(
-    f"sqlite:///{settings.SQLITE_DB_PATH}",
-    connect_args={"check_same_thread": False},
-    echo=False
-)
-
-SessionLocal = sessionmaker(
-    autocommit=False,
-    autoflush=False,
-    bind=engine
-)
-
-Base = declarative_base()
-
-
-def get_db():
-    """
-    FastAPI dependency that provides a database session.
-    Usage in an endpoint:
-        def my_endpoint(db: Session = Depends(get_db)):
-    The session is automatically closed after the request finishes.
-    """
-    db = SessionLocal()
-    try:
-        yield db
-    finally:
-        db.close()
+The canonical database engine / SessionLocal / Base / get_db live in
+app.core.database — every model imports `from app.core.database import Base`.
+This module previously declared a SECOND, separate Base + engine here, which
+created two independent metadata registries (a subtle source of "table not
+found" / duplicate-mapper bugs). It is intentionally left empty now; import
+database objects from app.core.database.
+"""
