@@ -9,6 +9,12 @@ from langchain_community.document_loaders import PyPDFLoader, Docx2txtLoader
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_google_genai import GoogleGenerativeAIEmbeddings, ChatGoogleGenerativeAI
 from langchain_chroma import Chroma
+from tenacity import (
+    retry,
+    retry_if_exception,
+    stop_after_attempt,
+    wait_exponential,
+)
 from langchain_classic.chains import create_retrieval_chain
 from langchain_classic.chains.combine_documents import create_stuff_documents_chain
 from langchain_core.prompts import ChatPromptTemplate
@@ -16,6 +22,44 @@ from langchain_classic.chains import create_history_aware_retriever
 from langchain_core.prompts import MessagesPlaceholder
 
 load_dotenv()
+
+# Google's embedding API occasionally returns transient server-side errors
+# (500 INTERNAL, 503 UNAVAILABLE, 429 rate limits, deadline exceeded). These are
+# not caused by our data or query -- a retry almost always succeeds. Without
+# retries a single blip fails the whole chat turn (surfaced to the user as 503).
+_TRANSIENT_MARKERS = (
+    "500", "internal",
+    "503", "unavailable",
+    "429", "resource_exhausted", "rate limit", "quota",
+    "deadline", "timeout", "timed out",
+)
+
+
+def _is_transient_error(exc: BaseException) -> bool:
+    msg = str(exc).lower()
+    return any(marker in msg for marker in _TRANSIENT_MARKERS)
+
+
+# Retry a few times with exponential backoff (2s, 4s, 8s, capped at 10s).
+_embedding_retry = retry(
+    retry=retry_if_exception(_is_transient_error),
+    wait=wait_exponential(multiplier=2, min=2, max=10),
+    stop=stop_after_attempt(4),
+    reraise=True,
+)
+
+
+class RetryingGoogleGenerativeAIEmbeddings(GoogleGenerativeAIEmbeddings):
+    """GoogleGenerativeAIEmbeddings that retries on transient API errors."""
+
+    @_embedding_retry
+    def embed_query(self, text):
+        return super().embed_query(text)
+
+    @_embedding_retry
+    def embed_documents(self, texts, *args, **kwargs):
+        return super().embed_documents(texts, *args, **kwargs)
+
 
 def load_documents_from_folder(folder_path):
     documents = []
@@ -43,8 +87,8 @@ def run_rag_pipeline():
     chroma_db_path = os.path.join(base_dir, 'chroma_db')
     docs_path = os.path.join(base_dir, 'docs')
 
-    # set up the embedding model
-    embeddings = GoogleGenerativeAIEmbeddings(model="gemini-embedding-001", task_type=None)
+    # set up the embedding model (with automatic retries on transient API errors)
+    embeddings = RetryingGoogleGenerativeAIEmbeddings(model="gemini-embedding-001", task_type=None)
 
     if os.path.exists(chroma_db_path):
         print()
