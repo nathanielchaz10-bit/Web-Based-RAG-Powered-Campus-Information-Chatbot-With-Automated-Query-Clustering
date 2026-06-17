@@ -7,6 +7,15 @@ Wires the RAG + clustering engines (from the top-level src/ package) into the
 relational backend and serves the static frontend.
 """
 
+import os
+import sys
+
+# Force THIS directory (hccs_rag_chatbot/) to the front of sys.path so that
+# `import app...` always resolves to the local app/ package, and is never
+# shadowed by the repo-root streamlit script (app.py). uvicorn --reload can put
+# the repo root on the path, which otherwise causes `import app` to load app.py.
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+
 from pathlib import Path
 
 from fastapi import FastAPI

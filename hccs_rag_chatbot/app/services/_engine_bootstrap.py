@@ -15,8 +15,11 @@ import sys
 
 from app.core.config import settings, REPO_ROOT
 
+# Append (don't prepend): the repo root contains app.py, which would shadow the
+# local `app` package if it landed ahead of hccs_rag_chatbot/ on the path. We
+# only need the repo root reachable so `import src.*` works.
 if str(REPO_ROOT) not in sys.path:
-    sys.path.insert(0, str(REPO_ROOT))
+    sys.path.append(str(REPO_ROOT))
 
 # langchain_google_genai looks for GOOGLE_API_KEY; the project's .env uses
 # GEMINI_API_KEY. Bridge them so the engines authenticate without changes.
