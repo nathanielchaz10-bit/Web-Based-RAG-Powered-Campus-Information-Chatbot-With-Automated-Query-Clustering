@@ -18,7 +18,7 @@ from tenacity import (
 from langchain_classic.chains import create_retrieval_chain
 from langchain_classic.chains.combine_documents import create_stuff_documents_chain
 from langchain_core.prompts import ChatPromptTemplate
-from langchain_classic.chains import create_history_aware_retriever
+from langchain_core.output_parsers import StrOutputParser
 from langchain_core.prompts import MessagesPlaceholder
 
 load_dotenv()
@@ -66,6 +66,42 @@ class RetryingGoogleGenerativeAIEmbeddings(GoogleGenerativeAIEmbeddings):
     @_embedding_retry
     def embed_documents(self, texts, *args, **kwargs):
         return super().embed_documents(texts, *args, **kwargs)
+
+
+class HistoryAwareRagChain:
+    """Two-step RAG chain that keeps the question-rewrite LLM call separate
+    from the retrieval (embedding) call.
+
+    LangChain's create_history_aware_retriever nests the rewrite LLM call and
+    the embedding call inside a single runnable invocation. With the Gemini
+    google-genai client, making the embedding request immediately after the
+    gemini-2.5-flash call in that nested context reliably triggers a spurious
+    500 INTERNAL from the embedding API (the identical query embeds fine on its
+    own). Running the rewrite as its own fully-completed invocation first, then
+    the plain retrieval chain, avoids that interaction.
+    """
+
+    def __init__(self, contextualize_chain, retrieval_chain):
+        self._contextualize = contextualize_chain
+        self._retrieval = retrieval_chain
+
+    def invoke(self, payload, *args, **kwargs):
+        question = payload["input"]
+        history = payload.get("chat_history") or []
+
+        if history:
+            # Resolve the standalone question FIRST (separate LLM call that
+            # fully returns before any embedding request is made).
+            standalone = self._contextualize.invoke(
+                {"input": question, "chat_history": history}
+            )
+            standalone = (standalone or "").strip() or question
+        else:
+            standalone = question
+
+        return self._retrieval.invoke(
+            {"input": standalone, "chat_history": history}, *args, **kwargs
+        )
 
 
 def load_documents_from_folder(folder_path):
@@ -193,11 +229,8 @@ def run_rag_pipeline():
         ("human", "{input}"),
     ])
 
-    history_aware_retriever = create_history_aware_retriever(
-        llm, 
-        retriever, 
-        contextualize_q_prompt
-    )
+    # Rewrite step as its OWN chain (LLM only -- no embedding nested inside).
+    contextualize_chain = contextualize_q_prompt | llm | StrOutputParser()
 
     # 7. build chains
     qa_system_prompt = (
@@ -214,7 +247,12 @@ def run_rag_pipeline():
     ])
 
     question_answer_chain = create_stuff_documents_chain(llm, qa_prompt)
-    rag_chain = create_retrieval_chain(history_aware_retriever, question_answer_chain)
+    # Plain retriever (NOT history-aware): the question is already rewritten by
+    # contextualize_chain before this runs, so no LLM call is nested with the
+    # embedding call here.
+    retrieval_chain = create_retrieval_chain(retriever, question_answer_chain)
+
+    rag_chain = HistoryAwareRagChain(contextualize_chain, retrieval_chain)
 
     print("RAG Chain Loaded Successfully.")
     return rag_chain
