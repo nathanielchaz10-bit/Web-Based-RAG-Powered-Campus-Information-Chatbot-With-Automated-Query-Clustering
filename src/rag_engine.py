@@ -60,6 +60,7 @@ class RetryingGoogleGenerativeAIEmbeddings(GoogleGenerativeAIEmbeddings):
 
     @_embedding_retry
     def embed_query(self, text):
+        print(f"[embed_query] len={len(text) if text is not None else 'None'} text={text!r}")
         return super().embed_query(text)
 
     @_embedding_retry
