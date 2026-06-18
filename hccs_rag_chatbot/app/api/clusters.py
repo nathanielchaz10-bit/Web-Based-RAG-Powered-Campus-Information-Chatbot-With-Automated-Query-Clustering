@@ -1,11 +1,4 @@
-"""Query-cluster endpoints.
-
-  POST /clusters/run  (admin)  -> run the LLM-clustering engine over QueryLog,
-                                  persisting a new ClusteringRun + Clusters.
-  GET  /clusters               -> the clusters from the most recent completed
-                                  run, shaped for the admin Query Clusters page.
-"""
-
+# app/api/clusters.py
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
@@ -15,7 +8,9 @@ from app.models.cluster import Cluster
 from app.models.cluster_keyword import ClusterKeyword
 from app.models.clustering_run import ClusteringRun
 from app.models.user_account import UserAccount
-from app.services.clustering import clustering_service
+
+# FIXED IMPORTS: Points straight to your active orchestrator script
+from app.services.clustering.pipeline import run_clustering_pipeline
 
 router = APIRouter(prefix="/clusters", tags=["Clusters"])
 
@@ -26,10 +21,32 @@ def run_clustering_endpoint(
     user: UserAccount = Depends(require_admin),
 ):
     try:
-        summary = clustering_service.run_clustering(db, triggered_by_user_id=user.user_id)
+        # FIXED CALL: Executes the correct SQLAlchemy pipeline function name
+        run_record = run_clustering_pipeline(
+            db,
+            triggered_by_user_id=user.user_id,
+            trigger_source="admin_manual"
+        )
+
+        # Check if the pipeline flagged any internal data issues
+        if run_record.status == "INSUFFICIENT":
+            raise HTTPException(
+                status_code=400,
+                detail="Insufficient student query records found to execute clustering yet."
+            )
+
+        return {
+            "status": "success",
+            "run_id": run_record.run_id,
+            "total_queries": run_record.total_queries,
+            "num_clusters": run_record.num_clusters_found,
+            "completed_at": run_record.completed_at.isoformat() if run_record.completed_at else None
+        }
+
+    except HTTPException:
+        raise
     except Exception as exc:
-        raise HTTPException(status_code=503, detail=f"Clustering failed: {exc}")
-    return summary
+        raise HTTPException(status_code=503, detail=f"Clustering run failed: {exc}")
 
 
 @router.get("")
