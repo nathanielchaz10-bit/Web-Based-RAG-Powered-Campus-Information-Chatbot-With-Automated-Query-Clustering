@@ -1,3 +1,4 @@
+
 """HCCS RAG Chatbot — FastAPI entrypoint.
 
 Run from inside the hccs_rag_chatbot/ directory:
@@ -27,6 +28,7 @@ from app.core.database import Base, engine, SessionLocal
 import app.models  # noqa: F401  (registers all ORM models on Base.metadata)
 from app.api import auth, chat, clusters, dashboard
 from app.api.deps import ensure_roles
+from app.services.clustering.scheduler import start_scheduler, stop_scheduler
 
 FRONTEND_DIR = Path(__file__).resolve().parent / "frontend"
 
@@ -71,9 +73,23 @@ def health():
 def root():
     return RedirectResponse(url="/frontend/index.html")
 
+@app.on_event("startup")
+def on_startup():
+    # Your existing table creation and role seeding
+    Base.metadata.create_all(bind=engine)
+    db = SessionLocal()
+    try:
+        ensure_roles(db)
+    finally:
+        db.close()
 
-# --- Static frontend --------------------------------------------------------
-# Mounted last so it doesn't shadow the API routes above.
+    start_scheduler()
+
+
+@app.on_event("shutdown")
+def on_shutdown():
+    stop_scheduler()
+
 app.mount("/frontend", StaticFiles(directory=str(FRONTEND_DIR), html=True), name="frontend")
 
 
