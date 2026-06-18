@@ -15,14 +15,11 @@ def setup_database():
             cluster_id INTEGER PRIMARY KEY AUTOINCREMENT,
             cluster_name TEXT NOT NULL,
             cluster_summary TEXT,
-            centroid BLOB,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )
     ''')
 
     # Table 2: Stores every question asked by students
-    # 'embedding' caches each query's vector so the cluster engine never has to
-    # re-embed the same text on subsequent runs.
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS user_queries (
             query_id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -30,7 +27,6 @@ def setup_database():
             answer_text TEXT,
             timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             cluster_id INTEGER,
-            embedding BLOB,
             FOREIGN KEY (cluster_id) REFERENCES query_clusters (cluster_id)
         )
     ''')
