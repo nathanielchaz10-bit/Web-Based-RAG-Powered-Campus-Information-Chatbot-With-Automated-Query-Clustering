@@ -61,8 +61,13 @@ class Settings(BaseSettings):
     # HCCS domain restriction. Set False in production.
     DEV_MODE: bool = True
 
+    # Look for .env in BOTH the repo root and the app root (hccs_rag_chatbot/),
+    # since the app is launched from inside hccs_rag_chatbot/ and a .env is just
+    # as likely to live there. Without this, a misplaced .env loads fine for the
+    # chat path (which calls load_dotenv) but leaves these settings on defaults
+    # — e.g. an empty GEMINI_API_KEY — which silently breaks the clustering path.
     model_config = SettingsConfigDict(
-        env_file=str(REPO_ROOT / ".env"),
+        env_file=(str(REPO_ROOT / ".env"), str(APP_ROOT / ".env")),
         env_file_encoding="utf-8",
         extra="ignore",
     )

@@ -10,9 +10,25 @@ langchain-google-genai client.
 
 import os
 
+from dotenv import load_dotenv
+
 from app.core.config import settings
 
-# langchain_google_genai looks for GOOGLE_API_KEY; the project's .env uses
-# GEMINI_API_KEY. Bridge them so the engines authenticate without changes.
-if settings.GEMINI_API_KEY and not os.environ.get("GOOGLE_API_KEY"):
-    os.environ["GOOGLE_API_KEY"] = settings.GEMINI_API_KEY
+# Load .env into the process environment the same way the RAG engine does
+# (searches the CWD upward), so the clustering path -- which never imports the
+# RAG engine -- gets the key regardless of whether .env sits at the repo root or
+# inside hccs_rag_chatbot/. This is what makes chat work; mirror it here.
+load_dotenv()
+
+# langchain_google_genai accepts GOOGLE_API_KEY or GEMINI_API_KEY from the
+# environment, while the project's .env uses GEMINI_API_KEY. Source the key from
+# pydantic settings (which reads .env) or whatever load_dotenv populated, then
+# make sure BOTH env var names are set so any client variant authenticates.
+_api_key = (
+    settings.GEMINI_API_KEY
+    or os.environ.get("GEMINI_API_KEY")
+    or os.environ.get("GOOGLE_API_KEY")
+)
+if _api_key:
+    os.environ.setdefault("GOOGLE_API_KEY", _api_key)
+    os.environ.setdefault("GEMINI_API_KEY", _api_key)
