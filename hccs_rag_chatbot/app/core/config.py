@@ -1,0 +1,71 @@
+from pathlib import Path
+from pydantic_settings import BaseSettings, SettingsConfigDict
+
+# ---------------------------------------------------------------------------
+# Path anchors (CWD-independent)
+# config.py lives at: <repo>/hccs_rag_chatbot/app/core/config.py
+#   parents[2] -> <repo>/hccs_rag_chatbot   (the app root, holds database/)
+#   parents[3] -> <repo>                     (repo root, holds docs/, src/, chroma_db/)
+# ---------------------------------------------------------------------------
+APP_ROOT = Path(__file__).resolve().parents[2]
+REPO_ROOT = Path(__file__).resolve().parents[3]
+
+
+class Settings(BaseSettings):
+    """Central configuration.
+
+    Every field now has a sensible default so the FastAPI app boots even when
+    .env is incomplete (e.g. during local testing / demos). Fill .env in for
+    real Google OAuth + your own Gemini key. See .env.example for the full list.
+    """
+
+    # --- Google OAuth (only needed for the real Google login path) ----------
+    GOOGLE_CLIENT_ID: str = ""
+    GOOGLE_CLIENT_SECRET: str = ""
+    GOOGLE_REDIRECT_URI: str = "http://localhost:8000/api/auth/callback"
+    HCCS_DOMAIN: str = "hccs.edu.ph"
+
+    # --- Gemini / LLM -------------------------------------------------------
+    GEMINI_API_KEY: str = ""
+    EMBEDDING_MODEL: str = "gemini-embedding-001"
+    LLM_MODEL: str = "gemini-2.5-flash"
+
+    # --- Database -----------------------------------------------------------
+    # Absolute paths by default so the app works no matter where it's launched.
+    SQLITE_DB_PATH: str = str(APP_ROOT / "database" / "hccs_rag.db")
+    CHROMA_DB_PATH: str = str(REPO_ROOT / "chroma_db")
+
+    # --- Security / JWT -----------------------------------------------------
+    JWT_SECRET_KEY: str = "dev-secret-change-me-in-production"
+    JWT_ALGORITHM: str = "HS256"
+    JWT_EXPIRE_MINUTES: int = 60
+
+    # --- RAG configuration (mirror src/rag_engine.py where known) -----------
+    TOP_K_CHUNKS: int = 5
+    CHUNK_SIZE: int = 1000
+    CHUNK_OVERLAP: int = 200
+    RELEVANCE_THRESHOLD: float = 0.7
+    RAG_TEMPERATURE: float = 0.0
+    MAX_CONTEXT_TOKENS: int = 4000
+
+    # --- Rate limiting ------------------------------------------------------
+    RATE_LIMIT_MAX_REQUESTS: int = 20
+    RATE_LIMIT_WINDOW_SECONDS: int = 60
+
+    # --- Clustering (mirror src/cluster_engine.py) --------------------------
+    CLUSTERING_MIN_QUERIES: int = 3
+    CLUSTERING_SCHEDULE_HOUR: int = 2
+
+    # --- Development Mode ----------------------------------------------------
+    # True during development/demo: enables the dev-login bypass and relaxes the
+    # HCCS domain restriction. Set False in production.
+    DEV_MODE: bool = True
+
+    model_config = SettingsConfigDict(
+        env_file=str(REPO_ROOT / ".env"),
+        env_file_encoding="utf-8",
+        extra="ignore",
+    )
+
+
+settings = Settings()

@@ -312,7 +312,7 @@ with st.sidebar:
     """, unsafe_allow_html=True)
 
 if clusters_df is None:
-    st.error("Could not find `analytics.db`. Make sure it exists in the same folder as this file.")
+    st.error("Could not find `analytics.db`. Run `python db_tools/init_db.py` from the project root to create it.")
     st.stop()
 
 # ── Summary metrics ───────────────────────────────────────────────────────────

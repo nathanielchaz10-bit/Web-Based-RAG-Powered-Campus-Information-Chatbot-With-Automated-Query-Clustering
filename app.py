@@ -1,3 +1,4 @@
+import os
 import streamlit as st
 from src.rag_engine import run_rag_pipeline, log_query_to_db
 
@@ -237,7 +238,37 @@ if user_question := st.chat_input("Type your question here…"):
                 })
 
                 answer = results['answer']
+                context_docs = results.get('context', [])
+
                 st.markdown(answer)
+
+                # Low-relevance fallback
+                fallback_phrases = ["i don't know", "i do not know", "don't have information", "not in the context", "cannot find"]
+                if any(phrase in answer.lower() for phrase in fallback_phrases):
+                    st.markdown(
+                        "<div style='font-size:0.82rem;color:#5a6a88;margin-top:0.5rem;'>"
+                        "For more specific information, please contact the school administration office directly."
+                        "</div>",
+                        unsafe_allow_html=True
+                    )
+
+                # Source citations
+                if context_docs:
+                    sources = set()
+                    for doc in context_docs:
+                        src = doc.metadata.get('source', '')
+                        if src:
+                            name = os.path.splitext(os.path.basename(src))[0]
+                            name = name.replace('_', ' ').replace('-', ' ').title()
+                            sources.add(name)
+                    if sources:
+                        st.markdown(
+                            f"<div style='font-size:0.75rem;color:#5a6a88;margin-top:0.75rem;'>"
+                            f"Source: {', '.join(sorted(sources))}"
+                            f"</div>",
+                            unsafe_allow_html=True
+                        )
+
                 st.session_state.messages.append({"role": "assistant", "content": answer})
                 log_query_to_db(user_question, answer)
 
