@@ -133,18 +133,29 @@ def run_rag_pipeline():
     # set up the embedding model (with automatic retries on transient API errors)
     embeddings = RetryingGoogleGenerativeAIEmbeddings(model="gemini-embedding-001", task_type=None)
 
-    if os.path.exists(chroma_db_path):
-        print()
-        print("Found existing database. Loading from disk.")
+    # Always open (or create) the persistent store first, then decide whether it
+    # actually needs building. A directory existing on disk does NOT mean it holds
+    # a real index -- a stray placeholder file (or an interrupted earlier build)
+    # leaves an empty collection that an existence-only check would happily load,
+    # making every answer "I do not know" because retrieval returns nothing. So we
+    # check the collection's document count, not just the folder.
+    vectorstore = Chroma(
+        persist_directory=chroma_db_path,
+        embedding_function=embeddings
+    )
 
-        vectorstore = Chroma(
-            persist_directory=chroma_db_path,
-            embedding_function=embeddings
-        )
+    try:
+        existing_count = vectorstore._collection.count()
+    except Exception:
+        existing_count = 0
+
+    if existing_count > 0:
+        print()
+        print(f"Found existing database with {existing_count} chunks. Loading from disk.")
 
     else:
         print()
-        print("No database found. Building from scratch.")
+        print("No populated database found. Building from scratch.")
 
         # 1. load documents ('docs' folder)
         docs = load_documents_from_folder(docs_path)
@@ -178,11 +189,6 @@ def run_rag_pipeline():
         print()
         print(f"Total chunks to process for ChromaDB: {len(splits)}")
         print()
-
-        vectorstore = Chroma(
-            persist_directory=chroma_db_path,
-            embedding_function=embeddings
-        )
 
         successful_chunks = 0
         for i, split in enumerate(splits):
