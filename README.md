@@ -33,11 +33,8 @@ The system is a **FastAPI** backend serving a static HTML/CSS/JS frontend:
 ├── src/                     # Shared engine code
 │   └── rag_engine.py        # RAG pipeline (ChromaDB + Gemini, history-aware)
 ├── docs/                    # Source documents indexed by the RAG engine
-├── db_tools/                # Database utility scripts (init/seed/reset)
-├── scripts/                 # Misc utility / testing scripts
-├── archive/                 # Retired / legacy code (kept for reference)
-├── requirements.txt         # Full pinned dependency set
-└── requirements-min.txt     # Slim subset — only what the app actually imports
+├── archive/                 # Retired / legacy code & old prototype scripts
+└── requirements.txt         # Pinned Python dependencies
 ```
 
 ### Inside `hccs_rag_chatbot/`
@@ -101,8 +98,6 @@ source venv/bin/activate        # Windows: venv\Scripts\activate
 
 ```bash
 pip install -r requirements.txt
-# or, for a lighter install with only what the app imports:
-# pip install -r requirements-min.txt
 ```
 
 ### 4. Configure environment variables
