@@ -54,6 +54,9 @@ def on_startup():
     finally:
         db.close()
 
+    # Start the background scheduler that runs the daily clustering job.
+    start_scheduler()
+
 
 # --- API routers ------------------------------------------------------------
 # auth lives under /api/auth/* (the frontend's auth.js calls http://host/api/...)
@@ -72,18 +75,6 @@ def health():
 @app.get("/")
 def root():
     return RedirectResponse(url="/frontend/index.html")
-
-@app.on_event("startup")
-def on_startup():
-    # Your existing table creation and role seeding
-    Base.metadata.create_all(bind=engine)
-    db = SessionLocal()
-    try:
-        ensure_roles(db)
-    finally:
-        db.close()
-
-    start_scheduler()
 
 
 @app.on_event("shutdown")

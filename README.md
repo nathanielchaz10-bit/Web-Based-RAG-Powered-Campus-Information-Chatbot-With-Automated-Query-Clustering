@@ -1,234 +1,143 @@
-# RAG Chatbot & Query Clustering
+# Web-Based RAG-Powered Campus Information Chatbot with Automated Query Clustering
 
-## Folder Structure Overview
-* `app.py`: Main Streamlit application entry point.
-* `src/`: Core logic and AI integrations (`rag_engine.py`, `cluster_engine.py`).
-* `scripts/`: Utility and testing scripts (`test_clustering.py`, `view_results.py`).
-* `pages/`: Contains the analytics dashboard interface (`dashboard.py`).
-* `db_tools/`: Scripts for initializing, seeding, and resetting the databases.
-* `docs/`: Contains the source documents (e.g., `cleaned student handbook.docx`).
-* `archive/`: Stores deprecated or legacy code.
-* `README.md`: Project documentation.
-* `requirements.txt`: Python dependencies.
+A web application for Holy Child Catholic School that lets students ask
+questions about campus information and get answers grounded in the school's own
+documents (RAG), while automatically grouping the questions students ask into
+topic clusters for an admin analytics dashboard.
 
-## Local Setup Instructions
+The system is a **FastAPI** backend serving a static HTML/CSS/JS frontend:
 
-Follow these steps to get the project running on your own machine.
+- **RAG chatbot** — retrieval-augmented generation over the school's documents
+  using ChromaDB + Google Gemini (embeddings + `gemini-2.5-flash`), with
+  history-aware follow-up questions.
+- **Automated query clustering** — an ML pipeline (Gemini embeddings →
+  Agglomerative clustering → LLM labeling) that groups logged student queries
+  into named topics. It runs on demand (admin) and on a daily schedule.
+- **Admin dashboard** — live metrics, query volume, system health, and the
+  cluster breakdown.
+- **Auth** — Google OAuth with role-based access (student / admin), plus a
+  dev-login bypass for local testing.
 
-### 1. Clone the Repository
+## Tech Stack
+
+- **Backend:** FastAPI, SQLAlchemy (SQLite), APScheduler
+- **AI/ML:** LangChain, Google Gemini (`langchain-google-genai`), ChromaDB,
+  scikit-learn (Agglomerative clustering), NumPy
+- **Frontend:** static HTML / CSS / vanilla JS (served by FastAPI)
+
+## Repository Layout
+
+```
+.
+├── hccs_rag_chatbot/        # The web application (FastAPI backend + frontend)
+├── src/                     # Shared engine code
+│   └── rag_engine.py        # RAG pipeline (ChromaDB + Gemini, history-aware)
+├── docs/                    # Source documents indexed by the RAG engine
+├── db_tools/                # Database utility scripts (init/seed/reset)
+├── scripts/                 # Misc utility / testing scripts
+├── archive/                 # Retired / legacy code (kept for reference)
+├── requirements.txt         # Full pinned dependency set
+└── requirements-min.txt     # Slim subset — only what the app actually imports
+```
+
+### Inside `hccs_rag_chatbot/`
+
+```
+hccs_rag_chatbot/
+├── main.py                  # FastAPI entry point (uvicorn target)
+├── INTEGRATION.md           # How the RAG engine + clustering pipeline are wired in
+│
+├── app/
+│   ├── api/                 # Route handlers
+│   │   ├── auth.py          #   /api/auth/* (Google OAuth + dev-login)
+│   │   ├── chat.py          #   POST /chat  (student chatbot)
+│   │   ├── clusters.py      #   /clusters   (run + read clustering results)
+│   │   ├── dashboard.py     #   /dashboard/* (admin analytics)
+│   │   └── deps.py          #   shared dependencies (auth, roles)
+│   │
+│   ├── core/                # config, database session, security (JWT)
+│   ├── models/              # SQLAlchemy ORM models (users, sessions, queries,
+│   │                        #   responses, clusters, runs, metrics, ...)
+│   └── services/
+│       ├── rag/             # rag_service.py — wraps src/rag_engine.py
+│       ├── clustering/      # the ML clustering pipeline:
+│       │   ├── preprocessor.py   #   fetch/validate clusterable queries
+│       │   ├── vectorizer.py      #   Gemini embeddings (batched, retrying)
+│       │   ├── algorithm.py       #   Agglomerative clustering
+│       │   ├── labeler.py         #   LLM names + describes each cluster
+│       │   ├── pipeline.py        #   orchestrates one full run + persistence
+│       │   └── scheduler.py       #   APScheduler daily run + manual trigger
+│       ├── nlp/             # local sentiment + intent classification
+│       ├── auth/            # Google OAuth + email-domain validation
+│       └── _engine_bootstrap.py   # puts repo root on sys.path; bridges API key
+│
+├── database/                # DB init/seed/inspect helpers + hccs_rag.db
+└── frontend/                # static site (login, student chat, admin pages)
+    ├── index.html           #   login page
+    ├── student/             #   student chatbot UI
+    ├── admin/               #   dashboard, clusters, documents, settings pages
+    ├── css/  └── js/         #   styles + page scripts
+```
+
+## Local Setup
+
+Run everything from the **repository root** unless noted.
+
+### 1. Clone
+
 ```bash
 git clone https://github.com/nathanielchaz10-bit/Web-Based-RAG-Powered-Campus-Information-Chatbot-With-Automated-Query-Clustering
-cd RAGV6
+cd Web-Based-RAG-Powered-Campus-Information-Chatbot-With-Automated-Query-Clustering
 ```
 
-### 2. Set Up the Virtual Environment
+### 2. Virtual environment
+
 ```bash
 python -m venv venv
+source venv/bin/activate        # Windows: venv\Scripts\activate
 ```
 
-### 3. Install Dependencies
+### 3. Install dependencies
+
 ```bash
 pip install -r requirements.txt
+# or, for a lighter install with only what the app imports:
+# pip install -r requirements-min.txt
 ```
 
-### 4. Configure Environment Variables
-You need a Google Gemini API key to run the LLM. You can get a free tier key from Google AI Studio.
+### 4. Configure environment variables
 
-a. Copy the .env.example file and rename the copy to .env.
+You need a Google Gemini API key (free tier from Google AI Studio works).
 
-b. Open newly named .env and paste your Gemini API key here:
 ```bash
-GEMINI_API_KEY=your_actual_key_here
-```
-c. Paste the team LangSmith API key (ask the project lead for this key via direct message).
-```bash    
-LANGCHAIN_API_KEY=actual_team_key_here
+cp .env.example .env            # then edit .env
 ```
 
-### 5. Initialize the Databases
-Before running the app, you need to set up your local SQLite and Chroma vector databases. Run the setup scripts provided in the tools folder:
+At minimum set `GEMINI_API_KEY` in `.env`. For real Google sign-in, also set
+`GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` / `GOOGLE_REDIRECT_URI` and
+`DEV_MODE=False`. While `DEV_MODE=True`, the login page exposes a **DEV ONLY**
+panel with Student / Admin buttons so no OAuth setup is needed locally.
+
+### 5. Add source documents (RAG corpus)
+
+Put the school's PDFs / DOCX files in the repo-root `docs/` folder. The RAG
+engine builds its ChromaDB index from this folder on first run.
+
+### 6. Run the app
+
 ```bash
-python db_tools/init_db.py
-python db_tools/seed_db.py
+cd hccs_rag_chatbot
+uvicorn main:app --reload --port 8000
 ```
 
-6. Run the Application
-Start the Streamlit server:
-```bash
-streamlit run app.py
-```
+Open **http://localhost:8000/** (redirects to the login page). On startup the
+database tables are auto-created, the default roles are seeded, and the daily
+clustering scheduler starts. To start from a clean database, delete
+`hccs_rag_chatbot/database/hccs_rag.db` and restart.
 
-```
-Project Structure 
+## Further Reading
 
-hccs_rag_chatbot/
-│
-├── 📄 .env.example                     # Template — never commit the real .env
-├── 📄 .gitignore
-├── 📄 requirements.txt
-├── 📄 README.md
-├── 📄 main.py                          # FastAPI app entry point
-│
-├── 📁 app/
-│   ├── 📄 __init__.py
-│   │
-│   ├── 📁 api/
-│   │   ├── 📄 __init__.py
-│   │   ├── 📄 auth.py
-│   │   ├── 📄 chat.py
-│   │   ├── 📄 documents.py
-│   │   ├── 📄 clusters.py
-│   │   ├── 📄 dashboard.py
-│   │   ├── 📄 settings.py
-│   │   └── 📄 users.py
-│   │
-│   ├── 📁 core/
-│   │   ├── 📄 __init__.py
-│   │   ├── 📄 config.py
-│   │   ├── 📄 database.py
-│   │   ├── 📄 security.py
-│   │   ├── 📄 rate_limiter.py
-│   │   └── 📄 exceptions.py
-│   │
-│   ├── 📁 models/
-│   │   ├── 📄 __init__.py
-│   │   ├── 📄 role.py
-│   │   ├── 📄 user_account.py
-│   │   ├── 📄 auth_log.py
-│   │   ├── 📄 chat_session.py
-│   │   ├── 📄 document.py
-│   │   ├── 📄 document_chunk.py
-│   │   ├── 📄 clustering_run.py
-│   │   ├── 📄 cluster.py
-│   │   ├── 📄 cluster_keyword.py
-│   │   ├── 📄 query_log.py
-│   │   ├── 📄 chat_response.py
-│   │   └── 📄 system_metrics.py
-│   │
-│   ├── 📁 schemas/
-│   │   ├── 📄 __init__.py
-│   │   ├── 📄 auth.py
-│   │   ├── 📄 chat.py
-│   │   ├── 📄 document.py
-│   │   ├── 📄 cluster.py
-│   │   ├── 📄 dashboard.py
-│   │   ├── 📄 settings.py
-│   │   └── 📄 user.py
-│   │
-│   ├── 📁 services/
-│   │   ├── 📄 __init__.py
-│   │   │
-│   │   ├── 📁 auth/
-│   │   │   ├── 📄 __init__.py
-│   │   │   ├── 📄 google_oauth.py
-│   │   │   ├── 📄 session.py
-│   │   │   └── 📄 domain_validator.py
-│   │   │
-│   │   ├── 📁 rag/
-│   │   │   ├── 📄 __init__.py
-│   │   │   ├── 📄 pipeline.py
-│   │   │   ├── 📄 embedder.py
-│   │   │   ├── 📄 retriever.py
-│   │   │   ├── 📄 prompt_builder.py
-│   │   │   ├── 📄 generator.py
-│   │   │   └── 📄 fallback.py
-│   │   │
-│   │   ├── 📁 documents/
-│   │   │   ├── 📄 __init__.py
-│   │   │   ├── 📄 preprocessor.py
-│   │   │   ├── 📄 extractor.py
-│   │   │   ├── 📄 cleaner.py
-│   │   │   ├── 📄 chunker.py
-│   │   │   └── 📄 vector_store.py
-│   │   │
-│   │   ├── 📁 clustering/
-│   │   │   ├── 📄 __init__.py
-│   │   │   ├── 📄 pipeline.py
-│   │   │   ├── 📄 preprocessor.py
-│   │   │   ├── 📄 vectorizer.py
-│   │   │   ├── 📄 algorithm.py
-│   │   │   ├── 📄 labeler.py
-│   │   │   └── 📄 scheduler.py
-│   │   │
-│   │   ├── 📁 analytics/
-│   │   │   ├── 📄 __init__.py
-│   │   │   ├── 📄 dashboard.py
-│   │   │   ├── 📄 query_stats.py
-│   │   │   └── 📄 system_health.py
-│   │   │
-│   │   └── 📁 nlp/
-│   │       ├── 📄 __init__.py
-│   │       ├── 📄 sentiment.py
-│   │       ├── 📄 intent.py
-│   │       └── 📄 speech_to_text.py
-│   │
-│   └── 📁 middleware/
-│       ├── 📄 __init__.py
-│       ├── 📄 auth_middleware.py
-│       └── 📄 cors.py
-│
-├── 📁 database/
-│   ├── 📄 __init__.py
-│   ├── 📄 init_db.py
-│   └── 📄 seed.py
-│
-├── 📁 vector_store/
-│   └── 📄 .gitkeep                     # Keeps folder tracked, chroma_db ignored
-│
-├── 📁 uploads/
-│   ├── 📁 pdf/
-│   │   └── 📄 .gitkeep
-│   ├── 📁 docx/
-│   │   └── 📄 .gitkeep
-│   └── 📁 txt/
-│       └── 📄 .gitkeep
-│
-├── 📁 frontend/
-│   ├── 📄 index.html                   # Login page
-│   │
-│   ├── 📁 student/
-│   │   └── 📄 index.html               # Student chatbot interface
-│   │
-│   ├── 📁 admin/
-│   │   ├── 📄 dashboard.html
-│   │   ├── 📄 clusters.html
-│   │   ├── 📄 documents.html
-│   │   └── 📄 settings.html
-│   │
-│   ├── 📁 css/
-│   │   ├── 📄 global.css
-│   │   ├── 📄 login.css
-│   │   ├── 📄 chat.css
-│   │   └── 📄 admin.css
-│   │
-│   ├── 📁 js/
-│   │   ├── 📄 auth.js
-│   │   ├── 📄 router.js
-│   │   ├── 📄 api.js
-│   │   │
-│   │   ├── 📁 student/
-│   │   │   ├── 📄 chat.js
-│   │   │   ├── 📄 history.js
-│   │   │   └── 📄 voice.js
-│   │   │
-│   │   └── 📁 admin/
-│   │       ├── 📄 dashboard.js
-│   │       ├── 📄 clusters.js
-│   │       ├── 📄 documents.js
-│   │       └── 📄 settings.js
-│   │
-│   └── 📁 assets/
-│       ├── 📁 images/
-│       │   └── 📄 hccs-logo.png
-│       └── 📁 icons/
-│
-└── 📁 tests/
-    ├── 📄 __init__.py
-    ├── 📄 conftest.py
-    ├── 📄 test_auth.py
-    ├── 📄 test_rag.py
-    ├── 📄 test_documents.py
-    ├── 📄 test_clustering.py
-    ├── 📄 test_rate_limiter.py
-    └── 📄 test_api.py
+See [`hccs_rag_chatbot/INTEGRATION.md`](hccs_rag_chatbot/INTEGRATION.md) for how
+the RAG engine and clustering pipeline are wired into the backend, the key
+implementation decisions, and what is not yet integrated.
 ```
