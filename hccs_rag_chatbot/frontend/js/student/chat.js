@@ -19,14 +19,9 @@ document.addEventListener("DOMContentLoaded", () => {
 
     function addBubble(role, text) {
         const wrap = document.createElement("div");
+        // Styling lives in chat.css (.chat-msg / .chat-msg-user / .chat-msg-bot)
+        // so the bubbles stay in sync with the app's dark theme.
         wrap.className = `chat-msg chat-msg-${role}`;
-        // Inline fallback styling so it's readable even without dedicated CSS.
-        wrap.style.cssText =
-            "margin:10px 0;padding:12px 16px;border-radius:12px;max-width:75%;" +
-            "white-space:pre-wrap;line-height:1.45;" +
-            (role === "user"
-                ? "margin-left:auto;background:#0d2a5e;color:#fff;"
-                : "margin-right:auto;background:#f0f3fa;color:#1a1a2e;");
         wrap.textContent = text;
         chatHistory.appendChild(wrap);
         chatHistory.scrollTop = chatHistory.scrollHeight;
@@ -36,10 +31,10 @@ document.addEventListener("DOMContentLoaded", () => {
     function addSources(sources) {
         if (!sources || !sources.length) return;
         const el = document.createElement("div");
-        el.style.cssText =
-            "margin:-4px auto 10px 0;font-size:0.72rem;color:#5a6a88;max-width:75%;";
+        el.className = "chat-source";
         el.textContent = "Source: " + sources.join(", ");
         chatHistory.appendChild(el);
+        chatHistory.scrollTop = chatHistory.scrollHeight;
     }
 
     async function handleSend() {
