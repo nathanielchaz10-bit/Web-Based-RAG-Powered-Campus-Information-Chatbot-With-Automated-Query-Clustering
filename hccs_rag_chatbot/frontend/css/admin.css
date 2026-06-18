@@ -374,23 +374,6 @@ body {
 .dot.blue { border-color: #3b82f6; }
 .dot.grey { border-color: #94a3b8; }
 
-/* Intent pills (dashboard recent-inquiries). dashboard.js renders
-   <span class="intent-pill intent-{color}">; the color set below matches
-   intentClass() in frontend/js/admin/dashboard.js. */
-.intent-pill { padding: 4px 10px; border-radius: 6px; font-size: 12px; font-weight: 600; display: inline-block; white-space: nowrap; }
-.intent-blue { background-color: #eff6ff; color: #2563eb; }
-.intent-amber { background-color: #fffbeb; color: #b45309; }
-.intent-purple { background-color: #faf5ff; color: #9333ea; }
-.intent-teal { background-color: #f0fdfa; color: #0d9488; }
-.intent-gray { background-color: #f1f5f9; color: #475569; }
-
-/* Sentiment pills — colors match sentimentClass() in dashboard.js and the
-   three buckets produced by app/services/nlp/sentiment.py. */
-.sentiment-positive { color: #059669; }
-.sentiment-neutral { color: #64748b; }
-.sentiment-urgent { color: #dc2626; }
-.sentiment-negative { color: #dc2626; }
-
 /* --- CLUSTERS PAGE SPECIFICS --- */
 .page-header-flex { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 24px; }
 .header-buttons { display: flex; gap: 12px; }
@@ -1002,3 +985,34 @@ input[type="range"]::-webkit-slider-thumb {
     z-index: 999;
 }
 .toast.visible { display: block; }
+
+/* =========================================================
+   CLUSTERS PAGE — dynamic empty/placeholder states
+   Added to support a non-hardcoded clusters.html: the chart,
+   cluster grid, and KPI trend all need a "no data yet" mode
+   that swaps in once a real ClusteringRun has completed.
+   ========================================================= */
+.hidden { display: none !important; }
+
+.card-header-title { display: flex; align-items: center; gap: 8px; }
+.card-header-title svg { color: #64748b; flex-shrink: 0; }
+
+.chart-container { position: relative; }
+.chart-empty-state {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #94a3b8;
+    font-size: 14px;
+}
+
+.clusters-actions-row { margin-bottom: 24px; }
+
+.empty-state-note { font-size: 14px; color: #64748b; padding: 4px; }
+.empty-state-note strong { color: #334155; }
+
+.status-dot.yellow { background: #d97706; }
+.status-dot.red { background: #ef4444; }
+.status-dot.grey { background: #94a3b8; }
