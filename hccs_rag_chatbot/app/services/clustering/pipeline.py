@@ -24,6 +24,13 @@ from typing import Optional
 
 from sqlalchemy.orm import Session
 
+# Side effect: bridges GEMINI_API_KEY -> GOOGLE_API_KEY so the Gemini clients
+# built lazily by the vectorizer/labeler authenticate. The chat path gets this
+# via rag_service; the clustering path (scheduler/admin trigger) never imports
+# rag_service, so it must bridge the key here -- otherwise a .env with only
+# GEMINI_API_KEY set would fail clustering even though chat works.
+import app.services._engine_bootstrap  # noqa: F401
+
 from app.models.clustering_run import ClusteringRun
 from app.models.cluster import Cluster
 from app.models.cluster_keyword import ClusterKeyword
