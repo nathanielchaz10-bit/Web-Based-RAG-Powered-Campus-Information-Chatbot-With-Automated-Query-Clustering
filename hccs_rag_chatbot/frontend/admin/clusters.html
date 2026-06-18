@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Query Clusters - HCCS Admin Portal</title>
-    <link rel="stylesheet" href="../css/admin.css">
+    <link rel="stylesheet" href="/frontend/css/admin.css">
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 </head>
 <body>
@@ -15,28 +15,28 @@
                 <p>HOLY CHILD CATHOLIC SCHOOL</p>
             </div>
             <nav class="sidebar-nav">
-                <a href="dashboard.html" class="nav-item">
+                <a href="/frontend/admin/dashboard.html" class="nav-item">
                     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"></rect><rect x="14" y="3" width="7" height="7"></rect><rect x="14" y="14" width="7" height="7"></rect><rect x="3" y="14" width="7" height="7"></rect></svg>
                     Dashboard Overview
                 </a>
-                <a href="#" class="nav-item active">
+                <a href="/frontend/admin/clusters.html" class="nav-item active">
                     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="18" cy="5" r="3"></circle><circle cx="6" cy="12" r="3"></circle><circle cx="18" cy="19" r="3"></circle><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"></line><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"></line></svg>
                     Query Clusters
                 </a>
-                <a href="documents.html" class="nav-item">
+                <a href="/frontend/admin/documents.html" class="nav-item">
                     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path></svg>
                     Document Directory
                 </a>
-                <a href="settings.html" class="nav-item">
+                <a href="/frontend/admin/settings.html" class="nav-item">
                     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>
                     Settings
                 </a>
             </nav>
             <div class="sidebar-footer">
-                <a href="#" class="nav-item logout-btn">
+                <span class="nav-item logout-btn" onclick="logout()" style="cursor: pointer;">
                     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path><polyline points="16 17 21 12 16 7"></polyline><line x1="21" y1="12" x2="9" y2="12"></line></svg>
                     Logout
-                </a>
+                </span>
             </div>
         </aside>
 
@@ -68,39 +68,78 @@
                     <p>Monitor student inquiry trends and AI sentiment resolution.</p>
                 </div>
 
-                <div class="analytics-top-grid" style="display: grid; grid-template-columns: 2fr 1fr; gap: 24px; margin-top: 24px;">
-                    <div class="dashboard-card chart-card" style="background: #fff; padding: 24px; border-radius: 12px; border: 1px solid #e2e8f0; height: 320px; position: relative;">
-                        <canvas id="topicChart"></canvas>
+                <div class="cluster-top-grid">
+                    <div class="card chart-card">
+                        <div class="card-header">
+                            <div class="card-header-title">
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="20" x2="18" y2="10"></line><line x1="12" y1="20" x2="12" y2="4"></line><line x1="6" y1="20" x2="6" y2="14"></line></svg>
+                                <h3>Query Volume by Topic</h3>
+                            </div>
+                            <span class="subtitle"><span class="dot grey"></span> AUTOMATED CLASSIFICATION</span>
+                        </div>
+                        <div class="chart-container">
+                            <canvas id="topicChart" class="hidden"></canvas>
+                            <div id="chart-empty-state" class="chart-empty-state">No clusters yet.</div>
+                        </div>
                     </div>
 
-                    <div class="analytics-right-sidebar" style="display: flex; flex-direction: column; gap: 16px;">
-                        <div class="stat-card blue-card" style="background: #152e51; padding: 24px; border-radius: 12px; color: #fff;">
-                            <h2>2,482</h2>
-                            <p style="color: #10b981; font-size: 13px; font-weight: 600; margin-top: 4px;">▲ +12% from last week</p>
+                    <div class="cluster-right-stack">
+                        <div class="dark-summary-card">
+                            <p class="summary-label">TOTAL PROCESSED QUERIES</p>
+                            <h2 id="total-queries-value">0</h2>
+                            <p class="summary-trend hidden" id="total-queries-trend">
+                                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="19" x2="12" y2="5"></line><polyline points="5 12 12 5 19 12"></polyline></svg>
+                                <span id="total-queries-trend-text"></span>
+                            </p>
                         </div>
 
-                        <div class="dashboard-card sentiment-card" style="background: #fff; padding: 24px; border-radius: 12px; border: 1px solid #e2e8f0;">
-                            <h4 style="font-size: 11px; font-weight: 700; color: #94a3b8; letter-spacing: 0.5px; margin-bottom: 16px; text-transform: uppercase;">Sentiment Distribution</h4>
-                            <div class="sentiment-rows-container">
-                                <div class="sentiment-row clickable-row">
-                                    <div style="display:flex; justify-content:space-between; font-size:13px; font-weight:600; margin-bottom:4px;"><span>Positive / Inquisitive</span><span>65%</span></div>
-                                    <div style="height:6px; background:#f1f5f9; border-radius:3px;"><div style="width:65%; height:100%; background:#10b981; border-radius:3px;"></div></div>
+                        <div class="card">
+                            <p class="card-sm-title">SENTIMENT DISTRIBUTION</p>
+
+                            <div class="sentiment-row clickable-row" data-sentiment="positive">
+                                <div class="sent-labels">
+                                    <span>Positive / Inquisitive</span>
+                                    <span id="sentiment-positive-pct">0%</span>
                                 </div>
-                                <div class="sentiment-row clickable-row" style="margin-top:16px;">
-                                    <div style="display:flex; justify-content:space-between; font-size:13px; font-weight:600; margin-bottom:4px;"><span>Neutral / Transactional</span><span>25%</span></div>
-                                    <div style="height:6px; background:#f1f5f9; border-radius:3px;"><div style="width:25%; height:100%; background:#3b82f6; border-radius:3px;"></div></div>
+                                <div class="sent-bar"><div class="sent-fill green" id="sentiment-positive-fill" style="width:0%"></div></div>
+                            </div>
+
+                            <div class="sentiment-row clickable-row" data-sentiment="neutral">
+                                <div class="sent-labels">
+                                    <span>Neutral / Transactional</span>
+                                    <span id="sentiment-neutral-pct">0%</span>
                                 </div>
-                                <div class="sentiment-row clickable-row" style="margin-top:16px;">
-                                    <div style="display:flex; justify-content:space-between; font-size:13px; font-weight:600; margin-bottom:4px; color:#ef4444;"><span>Urgent / Frustrated</span><span>10%</span></div>
-                                    <div style="height:6px; background:#f1f5f9; border-radius:3px;"><div style="width:10%; height:100%; background:#ef4444; border-radius:3px;"></div></div>
+                                <div class="sent-bar"><div class="sent-fill blue" id="sentiment-neutral-fill" style="width:0%"></div></div>
+                            </div>
+
+                            <div class="sentiment-row clickable-row" data-sentiment="urgent">
+                                <div class="sent-labels">
+                                    <span style="color:#ef4444;">Urgent / Frustrated</span>
+                                    <span id="sentiment-urgent-pct">0%</span>
                                 </div>
+                                <div class="sent-bar"><div class="sent-fill red" id="sentiment-urgent-fill" style="width:0%"></div></div>
                             </div>
                         </div>
                     </div>
                 </div>
 
-                <div id="cluster-cards-container" style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 24px; margin-top: 24px;">
-                    </div>
+                <div class="clusters-actions-row">
+                    <button class="solid-btn-sm" id="run-clustering-btn">Run Clustering</button>
+                </div>
+
+                <div id="cluster-cards-grid" class="cluster-cards-grid hidden"></div>
+
+                <p id="cluster-empty-state" class="empty-state-note">
+                    No clusters yet. Click <strong>Run Clustering</strong> once there are enough student queries logged.
+                </p>
+            </div>
+
+            <div class="admin-footer">
+                <div class="status-indicators">
+                    <span><span class="status-dot green"></span>NLP ENGINE: OPERATIONAL</span>
+                    <span><span class="status-dot grey" id="clustering-status-dot"></span><span id="clustering-status-text">CLUSTERING SERVICE: IDLE</span></span>
+                </div>
+                <span class="copyright">© 2026 HOLY CHILD CATHOLIC SCHOOL — ADMIN INTELLIGENCE UNIT</span>
             </div>
         </main>
     </div>
@@ -115,55 +154,45 @@
             </div>
             <div class="modal-body">
                 <p class="modal-desc">Top AI-extracted reasons driving negative sentiment for this period.</p>
-                <ul class="driver-list">
-                    <li><span class="driver-title">Cashier long lines</span><span class="driver-count">45 queries</span></li>
-                    <li><span class="driver-title">Student Portal login errors</span><span class="driver-count">30 queries</span></li>
-                    <li><span class="driver-title">Missing grades in system</span><span class="driver-count">12 queries</span></li>
+                <ul class="driver-list" id="sentiment-drivers-list">
+                    <li><span class="driver-title">No data yet</span></li>
                 </ul>
             </div>
         </div>
     </div>
 
-                <div id="queries-modal" class="ui-overlay hidden">
-            <div class="ui-modal-content wide-modal">
-                <div class="modal-header extended-header">
-                    <div>
-                        <h3>Raw Queries: Scholarship Guidelines</h3>
-                        <p class="modal-subtitle">Showing recent student inputs mapped to this cluster.</p>
-                    </div>
-                    <div class="header-actions-row">
-                        <div class="modal-toggle-group">
-                            <button class="toggle-btn active" data-filter="all">All Queries</button>
-                            <button class="toggle-btn" data-filter="low">Low Confidence Only</button>
-                        </div>
-                        <button class="icon-btn close-ui-btn">&times;</button>
-                    </div>
+    <div id="queries-modal" class="ui-overlay hidden">
+        <div class="ui-modal-content wide-modal">
+            <div class="modal-header extended-header">
+                <div>
+                    <h3 id="queries-modal-title">Raw Queries</h3>
+                    <p class="modal-subtitle">Showing recent student inputs mapped to this cluster.</p>
                 </div>
-
-                <div class="modal-body scrollable-body">
-                    <div class="query-card">
-                        <div class="query-meta">
-                            <span class="timestamp">TODAY, 10:42 AM</span>
-                            <span class="conf-badge high">• High Confidence (0.92)</span>
-                        </div>
-                        <p class="student-prompt">"What is the exact GWA needed?"</p>
-                        <p class="ai-response">AI Snippet: "To maintain the academic scholarship, you must have a GWA of 1.75..."</p>
-                        <div class="source-tag">📄 SOURCE: HANDBOOK_2025.DOCX</div>
+                <div class="header-actions-row">
+                    <div class="modal-toggle-group">
+                        <button class="toggle-btn active" data-filter="all">All Queries</button>
+                        <button class="toggle-btn" data-filter="low">Low Confidence Only</button>
                     </div>
+                    <button class="icon-btn close-ui-btn">&times;</button>
                 </div>
+            </div>
 
-                <div class="modal-footer-custom">
-                    <span style="color: #10b981; font-weight: 600;">● NLP PROCESSOR LIVE (0.45s LATENCY)</span>
-                    <div>
-                        <button class="outline-btn-sm" style="margin-right: 10px;">Download Log</button>
-                        <button class="solid-btn-sm" style="background: #7f1d1d;">Export to Ticket</button>
-                    </div>
+            <div class="modal-body scrollable-body" id="queries-modal-body">
+                <p class="placeholder-note">No queries loaded yet.</p>
+            </div>
+
+            <div class="modal-footer-custom">
+                <span style="color: #10b981; font-weight: 600;">● NLP PROCESSOR LIVE</span>
+                <div>
+                    <button class="outline-btn-sm" style="margin-right: 10px;">Download Log</button>
+                    <button class="solid-btn-sm" style="background: #7f1d1d;">Export to Ticket</button>
                 </div>
             </div>
         </div>
+    </div>
 
-    <script src="../js/api.js"></script>
-    <script src="../js/auth.js"></script>
-    <script src="../js/admin/clusters.js"></script>
+    <script src="/frontend/js/api.js"></script>
+    <script src="/frontend/js/auth.js"></script>
+    <script src="/frontend/js/admin/clusters.js"></script>
 </body>
 </html>
