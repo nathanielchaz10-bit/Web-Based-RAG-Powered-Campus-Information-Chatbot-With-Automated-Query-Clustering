@@ -1,8 +1,9 @@
 # Backend ↔ Engine Integration
 
-This document describes how the RAG engine (top-level `src/rag_engine.py`) and
-the query-clustering pipeline (`app/services/clustering/`) are wired into the
-FastAPI app (`hccs_rag_chatbot/`) against the relational schema in `hccs_rag.db`.
+This document describes how the RAG engine (`app/services/rag/rag_engine.py`)
+and the query-clustering pipeline (`app/services/clustering/`) are wired into
+the FastAPI app (`hccs_rag_chatbot/`) against the relational schema in
+`hccs_rag.db`.
 
 ## Running locally
 
@@ -30,7 +31,7 @@ Then open **http://localhost:8000/** (it redirects to the login page).
 
 | Area | Endpoint | Notes |
 |------|----------|-------|
-| Student chat | `POST /chat` | Calls `src/rag_engine` via `app/services/rag`. Logs `ChatSession` + `QueryLog` + `ChatResponse`. History is rebuilt server-side per session. |
+| Student chat | `POST /chat` | Calls `rag_engine` via `app/services/rag`. Logs `ChatSession` + `QueryLog` + `ChatResponse`. History is rebuilt server-side per session. |
 | Clustering (run) | `POST /clusters/run` (admin) | Runs the ML clustering pipeline in `app/services/clustering` (`pipeline.py`): Gemini embeddings → Agglomerative clustering → LLM labeling. Writes `ClusteringRun` + `Cluster` + `ClusterKeyword`, back-fills `QueryLog.cluster_id`. Also runs daily via `scheduler.py`. |
 | Clustering (read) | `GET /clusters` | Returns clusters of the latest completed run for the admin page. |
 | Dashboard | `GET /dashboard/{metrics,query-volume,system-health,recent-inquiries}` (admin) | Computed live from the DB. |
@@ -49,9 +50,10 @@ now has `api.js`/`auth.js` loaded (they were missing).
   an incomplete `.env`. Paths are absolute (CWD-independent).
 - **`GEMINI_API_KEY` is bridged to `GOOGLE_API_KEY`** (the var langchain-google
   actually reads) in `app/services/_engine_bootstrap.py`.
-- **The RAG engine in `src/rag_engine.py` is reused as-is** (single source of
-  truth); only the persistence layer was re-pointed from the old flat
-  `analytics.db` to the SQLAlchemy models.
+- **The RAG engine (`app/services/rag/rag_engine.py`) is the single source of
+  truth** for the retrieval chain; `app/services/rag/rag_service.py` wraps it
+  and handles persistence against the SQLAlchemy models (it originally lived in
+  a top-level `src/` package against a flat `analytics.db`).
 - **Clustering is its own ML pipeline** under `app/services/clustering/`
   (`preprocessor` → `vectorizer` → `algorithm` → `labeler`, orchestrated by
   `pipeline.py`). It replaces the original `src/cluster_engine.py` LLM-grouping

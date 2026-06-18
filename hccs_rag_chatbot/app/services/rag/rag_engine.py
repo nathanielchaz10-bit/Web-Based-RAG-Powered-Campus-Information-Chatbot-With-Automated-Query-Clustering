@@ -3,7 +3,7 @@ import re
 import time
 from dotenv import load_dotenv
 
-import sqlite3
+from app.core.config import REPO_ROOT, settings
 
 from langchain_community.document_loaders import PyPDFLoader, Docx2txtLoader
 from langchain_text_splitters import RecursiveCharacterTextSplitter
@@ -125,9 +125,10 @@ def run_rag_pipeline():
     print()
     print("Starting RAG pipeline.")
 
-    base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-    chroma_db_path = os.path.join(base_dir, 'chroma_db')
-    docs_path = os.path.join(base_dir, 'docs')
+    # chroma_db/ and docs/ live at the repo root, resolved via app config so
+    # this works no matter where the engine module physically sits.
+    chroma_db_path = settings.CHROMA_DB_PATH
+    docs_path = str(REPO_ROOT / 'docs')
 
     # set up the embedding model (with automatic retries on transient API errors)
     embeddings = RetryingGoogleGenerativeAIEmbeddings(model="gemini-embedding-001", task_type=None)
@@ -255,18 +256,3 @@ def run_rag_pipeline():
 
     print("RAG Chain Loaded Successfully.")
     return rag_chain
-
-def log_query_to_db(query_text, answer_text=None):
-    try:
-        base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-        db_path = os.path.join(base_dir, 'analytics.db')
-        conn = sqlite3.connect(db_path)
-        cursor = conn.cursor()
-        clean_query = query_text.lower().strip()
-        cursor.execute(
-            "INSERT INTO user_queries (query_text, answer_text) VALUES (?, ?)", 
-            (clean_query, answer_text))
-        conn.commit()
-        conn.close()
-    except Exception as e:
-        print(f"Logging error (ignoring so chat doesn't break): {e}")

@@ -5,7 +5,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 # Path anchors (CWD-independent)
 # config.py lives at: <repo>/hccs_rag_chatbot/app/core/config.py
 #   parents[2] -> <repo>/hccs_rag_chatbot   (the app root, holds database/)
-#   parents[3] -> <repo>                     (repo root, holds docs/, src/, chroma_db/)
+#   parents[3] -> <repo>                     (repo root, holds docs/, chroma_db/)
 # ---------------------------------------------------------------------------
 APP_ROOT = Path(__file__).resolve().parents[2]
 REPO_ROOT = Path(__file__).resolve().parents[3]
@@ -40,7 +40,7 @@ class Settings(BaseSettings):
     JWT_ALGORITHM: str = "HS256"
     JWT_EXPIRE_MINUTES: int = 60
 
-    # --- RAG configuration (mirror src/rag_engine.py where known) -----------
+    # --- RAG configuration (mirror rag_engine.py where known) ---------------
     TOP_K_CHUNKS: int = 5
     CHUNK_SIZE: int = 1000
     CHUNK_OVERLAP: int = 200
@@ -52,7 +52,7 @@ class Settings(BaseSettings):
     RATE_LIMIT_MAX_REQUESTS: int = 20
     RATE_LIMIT_WINDOW_SECONDS: int = 60
 
-    # --- Clustering (mirror src/cluster_engine.py) --------------------------
+    # --- Clustering (app/services/clustering) -------------------------------
     CLUSTERING_MIN_QUERIES: int = 3
     CLUSTERING_SCHEDULE_HOUR: int = 2
 

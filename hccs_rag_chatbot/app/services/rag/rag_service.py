@@ -1,6 +1,6 @@
-"""RAG service: thin wrapper around the original src/rag_engine.py.
+"""RAG service: thin wrapper around rag_engine.py (same package).
 
-Keeps src/rag_engine.py as the single source of truth for the retrieval chain
+Keeps rag_engine.py as the single source of truth for the retrieval chain
 (ChromaDB + Gemini, history-aware). The chain is expensive to build (it embeds
 the document corpus on first run), so it is built once and cached for the
 lifetime of the process.
@@ -9,7 +9,7 @@ lifetime of the process.
 import os
 import time
 
-import app.services._engine_bootstrap  # noqa: F401  (side effects: sys.path + GOOGLE_API_KEY)
+import app.services._engine_bootstrap  # noqa: F401  (side effect: bridges GOOGLE_API_KEY)
 
 _rag_chain = None
 
@@ -17,12 +17,12 @@ _rag_chain = None
 def get_rag_chain():
     """Lazily build (or load) the cached retrieval chain.
 
-    Raises whatever src.rag_engine raises if the corpus/API key is missing —
+    Raises whatever rag_engine raises if the corpus/API key is missing —
     callers should surface that as a 503.
     """
     global _rag_chain
     if _rag_chain is None:
-        from src.rag_engine import run_rag_pipeline
+        from app.services.rag.rag_engine import run_rag_pipeline
         _rag_chain = run_rag_pipeline()
     return _rag_chain
 

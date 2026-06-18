@@ -30,8 +30,6 @@ The system is a **FastAPI** backend serving a static HTML/CSS/JS frontend:
 ```
 .
 ├── hccs_rag_chatbot/        # The web application (FastAPI backend + frontend)
-├── src/                     # Shared engine code
-│   └── rag_engine.py        # RAG pipeline (ChromaDB + Gemini, history-aware)
 ├── docs/                    # Source documents indexed by the RAG engine
 ├── archive/                 # Retired / legacy code & old prototype scripts
 └── requirements.txt         # Pinned Python dependencies
@@ -56,7 +54,7 @@ hccs_rag_chatbot/
 │   ├── models/              # SQLAlchemy ORM models (users, sessions, queries,
 │   │                        #   responses, clusters, runs, metrics, ...)
 │   └── services/
-│       ├── rag/             # rag_service.py — wraps src/rag_engine.py
+│       ├── rag/             # rag_engine.py (RAG chain) + rag_service.py (wrapper)
 │       ├── clustering/      # the ML clustering pipeline:
 │       │   ├── preprocessor.py   #   fetch/validate clusterable queries
 │       │   ├── vectorizer.py      #   Gemini embeddings (batched, retrying)

@@ -23,7 +23,7 @@ python-multipart==0.0.27
 # --- Background scheduler (daily clustering run, app/services/clustering) ---
 APScheduler==3.10.4
 
-# --- RAG engine (src/rag_engine.py) + clustering pipeline stack ---
+# --- RAG engine (app/services/rag) + clustering pipeline stack ---
 numpy==2.4.4
 scipy==1.17.1
 scikit-learn==1.8.0
@@ -37,7 +37,7 @@ langchain-google-genai==4.2.2
 langchain-text-splitters==1.1.2
 tenacity==9.1.4
 
-# --- Document loaders used by the RAG engine (src/rag_engine.py) ---
+# --- Document loaders used by the RAG engine (app/services/rag) ---
 pypdf==6.10.2
 docx2txt==0.9
 
