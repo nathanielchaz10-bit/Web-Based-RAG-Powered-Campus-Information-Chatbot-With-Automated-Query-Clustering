@@ -1,30 +1,4 @@
 # app/services/nlp/intent.py
-"""
-Lightweight, zero-API-cost intent classification for student queries.
-
-Uses keyword/phrase matching against five fixed categories. These exact
-strings must match what's already hardcoded in:
-    - frontend/js/admin/dashboard.js  (intentClass() mapping, for CSS pill colors)
-    - frontend/js/admin/clusters.js   (cluster card titles like "Scholarship
-                                        Guidelines", "Enrollment Schedules")
-
-No ML model is used here intentionally — keyword rules are fully
-deterministic, require no training data, and are easy for a non-technical
-admin to audit/extend (just add a phrase to a list) compared to a trained
-classifier they can't inspect.
-
-Limitation to be aware of: ambiguous queries that don't match any keyword
-list fall back to "Academic Policy" as a catch-all. As real query volume
-comes in, the keyword lists below should be revisited and expanded based
-on what's actually showing up misclassified in the Query Clusters page —
-that's exactly the feedback loop the clustering pipeline (Step 3) is for.
-
-When adding new keywords, watch for substring collisions across category
-lists (e.g. "tuition" living in two categories where one is a more
-specific phrase like "free tuition") — see the comment above
-_CATEGORY_ORDER for the known collisions this module currently relies on
-staying in a specific check order.
-"""
 
 import re
 
@@ -48,7 +22,7 @@ _KEYWORDS = {
         "scholarship", "scholarships", "scholar", "scholars", "gwa",
         "general weighted average", "grade requirement", "form 138",
         "academic scholar", "grant", "financial assistance", "discount",
-        "iskolar", "iskolarship", "merit", "dean's lister", "deans lister",
+        "iskolar", "iskolarship", "merit", "deans lister",
         "latin honor", "academic excellence award", "free tuition",
         "maintain scholarship", "renew scholarship", "scholarship slot",
         "scholarship requirements", "qualify for scholarship",
@@ -70,15 +44,15 @@ _KEYWORDS = {
         "where is", "where can i find", "located", "location",
         "saan ang", "saan po ang", "office hours", "office", "clinic",
         "infirmary", "guidance office", "guidance counselor",
-        "registrar's office", "registrar office", "directory",
-        "room number", "what room", "building", "faculty", "professor's office",
-        "teacher's office", "contact number", "phone number", "telephone number",
+        "registrars office", "registrar office", "directory",
+        "room number", "what room", "building", "faculty", "professors office",
+        "teachers office", "contact number", "phone number", "telephone number",
         "email address of", "school address", "campus map", "how to get to",
     ],
     INTENT_PAYMENTS: [
         "payment", "payments", "pay", "paying", "paid", "tuition",
         "tuition fee", "balance", "account balance", "cashier",
-        "cashier's office", "billing", "billing statement", "invoice",
+        "cashiers office", "billing", "billing statement", "invoice",
         "fee", "fees", "miscellaneous fee", "installment", "installment plan",
         "down payment", "official receipt", "or number", "refund",
         "refund policy", "bayad", "magbayad", "babayaran", "utang",
@@ -154,11 +128,20 @@ def classify_intent(query_text: str) -> str:
 
 def _normalize(text: str) -> str:
     """
-    Lowercases and strips punctuation (keeping spaces) so phrase matching
-    isn't broken by things like "GWA?" or "tuition," not matching "gwa"/
+    Lowercases and strips punctuation so phrase matching isn't broken by
+    things like "GWA?" not matching "gwa", or "tuition," not matching
     "tuition" due to trailing punctuation.
+
+    Apostrophes are removed entirely (not replaced with a space) so that
+    "dean's lister" normalizes to "deans lister" and "cashier's office"
+    normalizes to "cashiers office" — this lets a single keyword entry
+    match both the contracted and uncontracted forms a student might type,
+    without needing two near-duplicate phrases in the keyword lists.
+    Hyphens are replaced with a space, so "mag-enroll" normalizes to
+    "mag enroll" and "re-enroll" stays matchable as "re enroll".
     """
     text = text.lower()
+    text = text.replace("'", "").replace("'", "")  # straight + curly apostrophe
     text = re.sub(r"[^\w\s]", " ", text)
     text = re.sub(r"\s+", " ", text).strip()
     return text
