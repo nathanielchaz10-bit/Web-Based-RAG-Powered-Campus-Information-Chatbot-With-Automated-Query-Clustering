@@ -13,6 +13,10 @@ __pycache__/
 chroma_db/
 analytics.db
 
+# Bake-off embedding cache (regenerated locally)
+bakeoff_large_vectors.npy
+bakeoff_large_texts.json
+
 # IDE / Editor Files
 tempCodeRunnerFile.py
 .vscode/
