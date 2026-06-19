@@ -38,13 +38,16 @@ def run_agglomerative_clustering(
     for query_id, label in zip(query_ids, labels):
         raw_groups.setdefault(int(label), []).append(query_id)
 
-    # Drop noise clusters below the minimum size threshold.
+    # Drop noise clusters below the minimum size threshold, then re-key the
+    # survivors as contiguous 0-based labels. sklearn assigns arbitrary,
+    # non-contiguous cluster ids (e.g. {3, 17, 42}); the downstream LLM labeler
+    # echoes the cluster numbers back as JSON keys, and it does that far more
+    # reliably for small, clean 0..k-1 labels than for sparse ids. (The LLM
+    # method already emits contiguous labels, which is why its labeling was
+    # reliable while the agglomerative path's was flaky.)
     min_size = settings.CLUSTERING_MIN_CLUSTER_SIZE
-    groups = {
-        label: members
-        for label, members in raw_groups.items()
-        if len(members) >= min_size
-    }
+    surviving = [members for members in raw_groups.values() if len(members) >= min_size]
+    groups = {label: members for label, members in enumerate(surviving)}
 
     return groups
 

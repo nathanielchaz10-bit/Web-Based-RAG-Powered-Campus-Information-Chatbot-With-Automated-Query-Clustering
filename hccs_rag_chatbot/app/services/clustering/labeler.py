@@ -12,7 +12,7 @@ Inquiries" instead of something keyword-literal like "Tuition Payment Pay".
 import json
 import re
 import time
-from typing import Dict, List, TypedDict
+from typing import Dict, List, Optional, TypedDict
 
 from langchain_google_genai import ChatGoogleGenerativeAI
 
@@ -66,39 +66,69 @@ def _build_prompt(cluster_texts: Dict[int, List[str]]) -> str:
     )
 
 
+def _coerce_entry(entry) -> Optional[ClusterLabel]:
+    """Turn one parsed JSON object into a ClusterLabel, or None if unusable."""
+    if not isinstance(entry, dict):
+        return None
+
+    name = str(entry.get("name", "")).strip()
+    if not name:
+        return None
+
+    description = str(entry.get("description", "")).strip()
+    raw_keywords = entry.get("keywords", [])
+
+    keywords = []
+    if isinstance(raw_keywords, list):
+        for kw in raw_keywords:
+            if isinstance(kw, dict) and kw.get("keyword"):
+                try:
+                    score = float(kw.get("relevance_score", 0.5))
+                except (TypeError, ValueError):
+                    score = 0.5
+                keywords.append({
+                    "keyword": str(kw["keyword"]).strip(),
+                    "relevance_score": max(0.0, min(1.0, score)),
+                })
+
+    return {
+        "name": name,
+        "description": description or f"Cluster of {name.lower()} related queries.",
+        "keywords": keywords,
+    }
+
+
 def _parse_response(raw: str, expected_labels: List[int]) -> Dict[int, ClusterLabel]:
     cleaned = re.sub(r"^```(?:json)?\s*|\s*```$", "", raw.strip(), flags=re.IGNORECASE).strip()
     parsed = json.loads(cleaned)
 
+    # Preferred path: the model echoed our cluster numbers back as JSON keys.
     result: Dict[int, ClusterLabel] = {}
-    for label in expected_labels:
-        entry = parsed.get(str(label))
-        if not isinstance(entry, dict):
-            continue
+    if isinstance(parsed, dict):
+        for label in expected_labels:
+            coerced = _coerce_entry(parsed.get(str(label)))
+            if coerced:
+                result[label] = coerced
+    if result:
+        return result
 
-        name = str(entry.get("name", "")).strip()
-        description = str(entry.get("description", "")).strip()
-        raw_keywords = entry.get("keywords", [])
+    # Fallback: the model renumbered or renamed the keys (common — it likes to
+    # use 0,1,2.. or the topic names regardless of the numbers we gave). If the
+    # entry count lines up, map them onto our labels positionally, since the
+    # clusters are presented to the model in expected_labels order. A possibly
+    # mis-ordered name beats every cluster collapsing to "Unlabeled Cluster".
+    if isinstance(parsed, dict):
+        entries = list(parsed.values())
+    elif isinstance(parsed, list):
+        entries = parsed
+    else:
+        entries = []
 
-        keywords = []
-        if isinstance(raw_keywords, list):
-            for kw in raw_keywords:
-                if isinstance(kw, dict) and kw.get("keyword"):
-                    try:
-                        score = float(kw.get("relevance_score", 0.5))
-                    except (TypeError, ValueError):
-                        score = 0.5
-                    keywords.append({
-                        "keyword": str(kw["keyword"]).strip(),
-                        "relevance_score": max(0.0, min(1.0, score)),
-                    })
-
-        if name:
-            result[label] = {
-                "name": name,
-                "description": description or f"Cluster of {name.lower()} related queries.",
-                "keywords": keywords,
-            }
+    if len(entries) == len(expected_labels):
+        for label, entry in zip(expected_labels, entries):
+            coerced = _coerce_entry(entry)
+            if coerced:
+                result[label] = coerced
 
     return result
 
