@@ -104,7 +104,7 @@ def run_llm_clustering(
 
     # 3. Expand each representative back to all its near-duplicate originals
     #    and re-key as contiguous integer labels, dropping below-minimum noise.
-    min_size = settings.CLUSTERING_MIN_QUERIES
+    min_size = settings.CLUSTERING_MIN_CLUSTER_SIZE
     groups: Dict[int, List[int]] = {}
     next_label = 0
     for group in named_groups:

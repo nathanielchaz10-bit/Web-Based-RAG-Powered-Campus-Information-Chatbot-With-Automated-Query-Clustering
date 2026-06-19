@@ -3,10 +3,8 @@ from typing import Dict, List
 
 import numpy as np
 from sklearn.cluster import AgglomerativeClustering
-from sklearn.preprocessing import normalize
 
-DISTANCE_THRESHOLD = 0.35
-MIN_CLUSTER_SIZE = 3
+from app.core.config import settings
 
 
 def run_agglomerative_clustering(
@@ -17,25 +15,35 @@ def run_agglomerative_clustering(
     n = len(query_ids)
     if n == 0:
         return {}
-    normed = normalize(np.asarray(vectors))
 
+    # Cluster on COSINE distance directly (distance = 1 - cosine similarity):
+    # two queries are "close" when their embeddings point the same semantic
+    # direction, regardless of magnitude. This is the natural metric for text
+    # embeddings and makes the threshold directly interpretable.
+    #
+    # Earlier this normalized the vectors and used euclidean distance with a
+    # 0.35 threshold, which on unit vectors only merged queries with cosine
+    # similarity >= ~0.94 (near-duplicate tightness) — so almost every query
+    # ended up a singleton and only one accidental group survived the min-size
+    # filter. Cosine + a topic-level threshold fixes that fragmentation.
     model = AgglomerativeClustering(
         n_clusters=None,
-        distance_threshold=DISTANCE_THRESHOLD,
-        metric="euclidean",
+        distance_threshold=settings.CLUSTERING_DISTANCE_THRESHOLD,
+        metric="cosine",
         linkage="average",
     )
-    labels = model.fit_predict(normed)
+    labels = model.fit_predict(np.asarray(vectors))
 
     raw_groups: Dict[int, List[int]] = {}
     for query_id, label in zip(query_ids, labels):
         raw_groups.setdefault(int(label), []).append(query_id)
 
     # Drop noise clusters below the minimum size threshold.
+    min_size = settings.CLUSTERING_MIN_CLUSTER_SIZE
     groups = {
         label: members
         for label, members in raw_groups.items()
-        if len(members) >= MIN_CLUSTER_SIZE
+        if len(members) >= min_size
     }
 
     return groups

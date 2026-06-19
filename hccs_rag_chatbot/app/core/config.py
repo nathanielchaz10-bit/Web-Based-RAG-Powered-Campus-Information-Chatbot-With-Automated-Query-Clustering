@@ -56,6 +56,11 @@ class Settings(BaseSettings):
     CLUSTERING_MIN_QUERIES: int = 3
     CLUSTERING_SCHEDULE_HOUR: int = 2
 
+    # Minimum members for a group to survive as a cluster (shared by BOTH
+    # methods). Smaller groups are dropped as one-off noise rather than
+    # surfaced on the dashboard.
+    CLUSTERING_MIN_CLUSTER_SIZE: int = 3
+
     # Which grouping strategy the pipeline uses to decide *which queries go
     # together*. Both share the same embedding + LLM-labeling steps; only the
     # grouping differs:
@@ -67,6 +72,17 @@ class Settings(BaseSettings):
     #                      topic quality; non-deterministic; costs LLM calls).
     # See app/services/clustering/algorithm.py vs algorithm_llm.py.
     CLUSTERING_METHOD: str = "agglomerative"
+
+    # --- Agglomerative method tuning (ignored when METHOD != "agglomerative") -
+    # Cosine DISTANCE at which clusters stop merging (distance = 1 - cosine
+    # similarity). Two queries merge when their similarity is roughly
+    # >= (1 - threshold), so 0.40 groups queries with cosine similarity ~0.60+.
+    # Lower -> more, tighter clusters; higher -> fewer, broader clusters.
+    # NOTE: the previous default effectively required ~0.94 similarity
+    # (near-duplicate level), which fragmented everything into singletons and
+    # left only one accidental cluster surviving the min-size filter. Tune this
+    # against a labeled sample for best results on your own data.
+    CLUSTERING_DISTANCE_THRESHOLD: float = 0.40
 
     # --- LLM clustering method tuning (ignored when METHOD != "llm") --------
     # Two queries whose normalized embeddings are at least this cosine-similar
