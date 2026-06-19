@@ -50,7 +50,9 @@ from database.seed_queries import SAMPLE_QUERIES
 
 NOISE_TOPIC = "_noise"
 LLM_RUNS = 3
-SWEEP = [round(x, 3) for x in np.arange(0.05, 0.45, 0.025)]
+# Wide range: run_agglomerative_clustering mean-centers the vectors, which
+# shifts the useful cosine-distance band higher than on raw embeddings.
+SWEEP = [round(x, 3) for x in np.arange(0.05, 1.0, 0.05)]
 
 
 def load():

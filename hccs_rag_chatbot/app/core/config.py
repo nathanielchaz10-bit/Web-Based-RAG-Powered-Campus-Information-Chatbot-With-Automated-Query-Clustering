@@ -61,15 +61,17 @@ class Settings(BaseSettings):
     CLUSTERING_MIN_CLUSTER_SIZE: int = 3
 
     # Cosine DISTANCE at which clusters stop merging (distance = 1 - cosine
-    # similarity). Two queries merge when their similarity is roughly
-    # >= (1 - threshold). Lower -> more, tighter clusters; higher -> fewer,
-    # broader (too high merges everything into one blob).
-    # The right value depends on your embeddings' distribution: Gemini
-    # embeddings are anisotropic (even unrelated queries sit fairly similar),
-    # so a smallish threshold is needed to separate topics. Run
-    # `python tune_threshold.py` to sweep this against your own cached vectors
-    # and pick the value that yields a sensible number of clusters.
-    CLUSTERING_DISTANCE_THRESHOLD: float = 0.25
+    # similarity), applied to the MEAN-CENTERED embeddings (see algorithm.py;
+    # centering is what makes a single threshold workable on anisotropic Gemini
+    # vectors). Lower -> more, tighter clusters; higher -> fewer, broader.
+    #   "auto" (default): the cut height is derived from the data each run by
+    #     finding the largest gap in the merge-height dendrogram — no manual
+    #     tuning, and robust to data drift. Recommended.
+    #   <number>: pin an explicit cosine distance. Run `python tune_threshold.py`
+    #     to sweep your own cached vectors and pick a value (it also prints what
+    #     "auto" would choose, so you can compare before pinning).
+    # Stored as a string so it accepts both "auto" and a numeric value.
+    CLUSTERING_DISTANCE_THRESHOLD: str = "auto"
 
     # --- Archived LLM-clustering experiment ---------------------------------
     # The pipeline uses agglomerative clustering only. An LLM-based alternative

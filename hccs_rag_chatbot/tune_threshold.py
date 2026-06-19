@@ -31,6 +31,7 @@ from app.core.database import SessionLocal
 import app.models  # noqa: F401  registers ORM models
 from app.models.query_log import QueryLog
 from app.core.config import settings
+from app.services.clustering.algorithm import _mean_center, _auto_distance_threshold
 
 
 def load_vectors():
@@ -70,36 +71,44 @@ def main():
 
     print(f"\nLoaded {n} embedded queries (dim={vecs.shape[1]}).\n")
 
+    # Clustering runs on the MEAN-CENTERED vectors (counteracts Gemini's
+    # anisotropy), so tune on the same space the pipeline actually sees.
+    centered = _mean_center(vecs)
+
     # Characterize the embedding distribution so the thresholds below make
-    # sense: cosine SIMILARITY percentiles across all query pairs.
-    sim = cosine_similarity(vecs)
-    upper = sim[np.triu_indices(n, k=1)]
-    pct = np.percentile(upper, [10, 25, 50, 75, 90])
-    print("Pairwise cosine SIMILARITY across all query pairs:")
+    # sense: cosine SIMILARITY percentiles across all query pairs, raw vs
+    # centered. Centering should pull unrelated pairs down toward ~0, which is
+    # what opens up a usable threshold band.
+    def _pct(V):
+        s = cosine_similarity(V)[np.triu_indices(n, k=1)]
+        return np.percentile(s, [10, 25, 50, 75, 90])
+
+    raw_pct, cen_pct = _pct(vecs), _pct(centered)
+    print("Pairwise cosine SIMILARITY across all query pairs (p10/median/p90):")
+    print(f"  raw:      {raw_pct[0]:.2f} / {raw_pct[2]:.2f} / {raw_pct[4]:.2f}")
+    print(f"  centered: {cen_pct[0]:.2f} / {cen_pct[2]:.2f} / {cen_pct[4]:.2f}")
     print(
-        f"  p10={pct[0]:.2f}  p25={pct[1]:.2f}  median={pct[2]:.2f}  "
-        f"p75={pct[3]:.2f}  p90={pct[4]:.2f}"
-    )
-    print(
-        "  (If even unrelated pairs sit high, e.g. median > 0.6, you need a "
-        "SMALL threshold to separate topics.)\n"
+        "  (Centered median near 0 with a wide spread is what you want — it "
+        "means topics are separable by a single threshold.)\n"
     )
 
+    auto_th = _auto_distance_threshold(centered)
     print(f"Min cluster size (dropped below this): {min_size}")
-    print(f"Current .env / default threshold:      {settings.CLUSTERING_DISTANCE_THRESHOLD}\n")
+    print(f"Current .env / default threshold:      {settings.CLUSTERING_DISTANCE_THRESHOLD}")
+    print(f"What \"auto\" would pick on this data:   {auto_th:.3f}\n")
 
     header = f"{'threshold':>9} | {'clusters':>8} | {'clustered':>9} | {'coverage':>8} | sizes"
     print(header)
     print("-" * len(header))
 
     rows = []  # (threshold, num_clusters, coverage)
-    for th in [round(x, 3) for x in np.arange(0.05, 0.55, 0.025)]:
+    for th in [round(x, 3) for x in np.arange(0.05, 1.0, 0.05)]:
         labels = AgglomerativeClustering(
             n_clusters=None,
             distance_threshold=th,
             metric="cosine",
             linkage="average",
-        ).fit_predict(vecs)
+        ).fit_predict(centered)
 
         groups = {}
         for label in labels:
@@ -127,19 +136,23 @@ def main():
         pick = plateau_ths[len(plateau_ths) // 2]
         cov = next(c for th, k, c in valid if th == pick and k == plateau_k)
         print(
-            f"Suggested starting point: CLUSTERING_DISTANCE_THRESHOLD={pick} "
-            f"({plateau_k} clusters, {cov:.0%} of queries clustered)."
+            f"Stable plateau: {plateau_k} clusters around "
+            f"CLUSTERING_DISTANCE_THRESHOLD={pick} ({cov:.0%} of queries "
+            f"clustered). \"auto\" picked {auto_th:.3f}."
         )
         print(
-            "That's the middle of the most stable band. Adjust to taste: lower "
-            "= more/tighter clusters, higher = fewer/broader. Set it in .env "
-            "and restart uvicorn."
+            "Default is CLUSTERING_DISTANCE_THRESHOLD=auto (no tuning needed). "
+            "Pin a value only if you want to override — e.g. nudge lower for "
+            f"more/tighter clusters or higher for fewer/broader; {pick} is the "
+            "middle of the most stable band here. Set it in .env and restart "
+            "uvicorn."
         )
     else:
         print(
-            "No threshold in the swept range gave a clean 2–30 cluster split — "
-            "your embeddings may be unusually tightly packed. Try extending the "
-            "sweep below 0.05, or use the LLM method for this data."
+            "No swept threshold gave a clean 2–30 cluster split, but \"auto\" "
+            f"derives its cut from the data ({auto_th:.3f}) and isn't limited to "
+            "this grid — leaving CLUSTERING_DISTANCE_THRESHOLD=auto is usually "
+            "the safest choice here."
         )
     print()
 
