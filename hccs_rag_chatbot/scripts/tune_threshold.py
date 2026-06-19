@@ -12,7 +12,7 @@ then set it in your .env:
     CLUSTERING_DISTANCE_THRESHOLD=<value>
 
 Run from inside hccs_rag_chatbot/:
-    python tune_threshold.py
+    python scripts/tune_threshold.py
 
 Requires at least one prior clustering run (or seed + run) so the embeddings
 are cached. Read-only: it never writes to the database.
@@ -25,7 +25,9 @@ import numpy as np
 from sklearn.cluster import AgglomerativeClustering
 from sklearn.metrics.pairwise import cosine_similarity
 
-sys.path.append(os.path.dirname(os.path.abspath(__file__)))
+# This script lives in hccs_rag_chatbot/scripts/; add the app root (its parent)
+# to the path so `import app...` resolves.
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from app.core.database import SessionLocal
 import app.models  # noqa: F401  registers ORM models

@@ -85,7 +85,7 @@ re-embedding, no API calls, read-only.**
 
 ```bash
 cd hccs_rag_chatbot
-python tune_threshold.py
+python scripts/tune_threshold.py
 ```
 
 It prints the raw-vs-centered similarity spread, a sweep table
@@ -132,7 +132,7 @@ python -m app.services.clustering.health_check
 
 | Setting | Default | Meaning |
 |---|---|---|
-| `CLUSTERING_DISTANCE_THRESHOLD` | `0.85` | How similar queries must be to group (on centered vectors). Re-tune with `tune_threshold.py`. |
+| `CLUSTERING_DISTANCE_THRESHOLD` | `0.85` | How similar queries must be to group (on centered vectors). Re-tune with `scripts/tune_threshold.py`. |
 | `CLUSTERING_MIN_CLUSTER_SIZE` | `3` | Smallest group that survives as a cluster. |
 | `CLUSTERING_MIN_QUERIES` | `3` | Minimum queries before a run starts. |
 | `CLUSTERING_SCHEDULE_HOUR` | `2` | Hour (UTC) for the daily run; monthly health-check runs on the 1st at `:30`. |
@@ -158,7 +158,7 @@ but are only used by the archived evaluation scripts.
   cluster labels (fixes occasionally-mislabeled clusters).
 - `app/core/config.py`, `.env.example` — threshold default + docs; removed
   LLM-method settings from the example.
-- `tune_threshold.py` — **new** tuning tool (centered space).
+- `scripts/tune_threshold.py` — **new** tuning tool (centered space).
 
 **Archived (not used by the app):**
 - `archive/llm_clustering_experiment/` — the LLM method + bake-off / evaluation
@@ -170,6 +170,6 @@ but are only used by the archived evaluation scripts.
 
 | Task | Command (from `hccs_rag_chatbot/`) |
 |---|---|
-| Re-tune the threshold | `python tune_threshold.py` |
+| Re-tune the threshold | `python scripts/tune_threshold.py` |
 | Run the threshold health-check now | `python -m app.services.clustering.health_check` |
 | Re-run the archived method bake-off | see `archive/llm_clustering_experiment/README.md` |

@@ -67,7 +67,7 @@ class Settings(BaseSettings):
     # Because centering pushes unrelated pairs apart, the useful value lives
     # higher than it would on raw vectors. 0.85 was tuned on real cached vectors
     # (8 balanced topic clusters, ~82% coverage, just below where topics start
-    # merging into blobs). Re-tune with `python tune_threshold.py` if you change
+    # merging into blobs). Re-tune with `python scripts/tune_threshold.py` if you change
     # embedding models or your query mix shifts.
     CLUSTERING_DISTANCE_THRESHOLD: float = 0.85
 

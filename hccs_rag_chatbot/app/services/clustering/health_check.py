@@ -12,7 +12,7 @@ What this does (and deliberately does NOT do):
     the right number of clusters from data alone is unreliable — every simple
     rule we tested either collapses to a couple of blobs or shatters into
     sub-themes (see the rejected auto-mode in git history). That judgement needs
-    a human reading tune_threshold.py's table with domain knowledge.
+    a human reading scripts/tune_threshold.py's table with domain knowledge.
   - It DOES the robust, easy part: detect when the CURRENT threshold is clearly
     malfunctioning — over-merging (everything collapses into one/two blobs) or
     severe over-fragmenting (most queries fall out as sub-min-size noise) — and
@@ -20,7 +20,7 @@ What this does (and deliberately does NOT do):
 
 When it sees a problem it records a recommendation (to system_metrics + logs)
 for a human to review, including which DIRECTION to nudge the threshold and a
-pointer to re-run tune_threshold.py. It never changes the configured value
+pointer to re-run scripts/tune_threshold.py. It never changes the configured value
 itself. Cheap: reads cached embeddings only (no re-embedding / LLM calls).
 """
 import json
@@ -201,7 +201,7 @@ def _log(result: Dict) -> None:
         d = result.get("suggested_direction")
         hint = f" (try a {'higher' if d == 'raise' else 'lower'} value)" if d else ""
         print(
-            f"  -> re-run `python tune_threshold.py` and re-pick "
+            f"  -> re-run `python scripts/tune_threshold.py` and re-pick "
             f"CLUSTERING_DISTANCE_THRESHOLD{hint}. Recorded to system_metrics."
         )
     else:

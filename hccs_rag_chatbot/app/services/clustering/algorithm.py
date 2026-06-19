@@ -45,7 +45,7 @@ def run_agglomerative_clustering(
     # vectors so the cosine threshold below is actually discriminative. Because
     # centering pushes unrelated pairs apart, the useful threshold lives higher
     # than on raw vectors (~0.85 vs the old ~0.25) — re-tune with
-    # tune_threshold.py if you change embedding models or your query mix shifts.
+    # scripts/tune_threshold.py if you change embedding models or query mix.
     X = _mean_center(vectors)
     threshold = settings.CLUSTERING_DISTANCE_THRESHOLD
 
@@ -87,7 +87,7 @@ def run_agglomerative_clustering(
         f"{sum(len(m) for m in groups.values())}/{n} queries. "
         f"If over-fragmented (near {n} singletons) raise "
         f"CLUSTERING_DISTANCE_THRESHOLD; if it collapses to 1-2 blobs, lower it "
-        f"(run tune_threshold.py)."
+        f"(run scripts/tune_threshold.py)."
     )
 
     if stats is not None:
