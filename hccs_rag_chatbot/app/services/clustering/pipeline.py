@@ -31,6 +31,7 @@ from sqlalchemy.orm import Session
 # GEMINI_API_KEY set would fail clustering even though chat works.
 import app.services._engine_bootstrap  # noqa: F401
 
+from app.core.config import settings
 from app.models.clustering_run import ClusteringRun
 from app.models.cluster import Cluster
 from app.models.cluster_keyword import ClusterKeyword
@@ -43,6 +44,7 @@ from app.services.clustering.preprocessor import (
 )
 from app.services.clustering.vectorizer import embed_queries, serialize_vector
 from app.services.clustering.algorithm import run_agglomerative_clustering, compute_centroid
+from app.services.clustering.algorithm_llm import run_llm_clustering
 from app.services.clustering.labeler import label_clusters
 
 
@@ -132,8 +134,15 @@ def run_clustering_pipeline(
     db.commit()
 
     # ── 3. Execute ML Clustering Algorithm ─────────────────────────────
+    # Method is config-switchable (settings.CLUSTERING_METHOD). Both methods
+    # return the same {label: [query_id]} shape, so everything below — labeling,
+    # centroid storage, Cluster/ClusterKeyword writes — is method-agnostic.
+    method = settings.CLUSTERING_METHOD.strip().lower()
     try:
-        groups = run_agglomerative_clustering(embedded_ids, vectors)
+        if method == "llm":
+            groups = run_llm_clustering(embedded_ids, vectors, texts_by_id)
+        else:
+            groups = run_agglomerative_clustering(embedded_ids, vectors)
     except Exception as exc:
         return _fail_run(db, run, STATUS_FAILED_ML, total_queries=len(records), error=f"Clustering failed: {exc}")
 
@@ -143,7 +152,7 @@ def run_clustering_pipeline(
         run.num_clusters_found = 0
         run.status = STATUS_COMPLETED
         run.completed_at = datetime.utcnow()
-        run.parameters = json.dumps({"trigger_source": trigger_source, "clusters_found": 0})
+        run.parameters = json.dumps({"trigger_source": trigger_source, "method": method, "clusters_found": 0})
         db.commit()
         db.refresh(run)
         return run
@@ -212,6 +221,7 @@ def run_clustering_pipeline(
     run.completed_at = datetime.utcnow()
     run.parameters = json.dumps({
         "trigger_source": trigger_source,
+        "method": method,
         "clusters_found": len(groups),
         "queries_clustered": total_clustered_queries,
         "queries_left_unclustered": len(records) - total_clustered_queries,

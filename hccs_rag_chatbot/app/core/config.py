@@ -56,6 +56,31 @@ class Settings(BaseSettings):
     CLUSTERING_MIN_QUERIES: int = 3
     CLUSTERING_SCHEDULE_HOUR: int = 2
 
+    # Which grouping strategy the pipeline uses to decide *which queries go
+    # together*. Both share the same embedding + LLM-labeling steps; only the
+    # grouping differs:
+    #   "agglomerative" -> sklearn AgglomerativeClustering on the embeddings
+    #                      (deterministic, cheap, scales freely; groups by
+    #                      embedding proximity).
+    #   "llm"           -> embeddings collapse near-duplicates, then the LLM
+    #                      groups the distinct queries by *intent* (better
+    #                      topic quality; non-deterministic; costs LLM calls).
+    # See app/services/clustering/algorithm.py vs algorithm_llm.py.
+    CLUSTERING_METHOD: str = "agglomerative"
+
+    # --- LLM clustering method tuning (ignored when METHOD != "llm") --------
+    # Two queries whose normalized embeddings are at least this cosine-similar
+    # are treated as near-paraphrases and collapsed to one representative
+    # before the LLM grouping step, keeping the prompt small. Kept high so only
+    # genuine duplicates merge ("what is the tuition" / "how much is tuition").
+    CLUSTERING_DEDUP_THRESHOLD: float = 0.95
+
+    # Scale safety net: once the number of *distinct* (post-dedup) queries
+    # exceeds this, the LLM grouping switches from a single prompt to a
+    # chunk-then-merge strategy so we never blow the model's context window.
+    # Sized for the ~1k–2k peak this deployment targets.
+    CLUSTERING_LLM_MAX_ITEMS: int = 400
+
     # --- Development Mode ----------------------------------------------------
     # True during development/demo: enables the dev-login bypass and relaxes the
     # HCCS domain restriction. Set False in production.
