@@ -132,8 +132,9 @@ def run_clustering_pipeline(
     db.commit()
 
     # ── 3. Execute ML Clustering Algorithm (Agglomerative) ─────────────
+    cluster_stats: dict = {}
     try:
-        groups = run_agglomerative_clustering(embedded_ids, vectors)
+        groups = run_agglomerative_clustering(embedded_ids, vectors, stats=cluster_stats)
     except Exception as exc:
         return _fail_run(db, run, STATUS_FAILED_ML, total_queries=len(records), error=f"Clustering failed: {exc}")
 
@@ -143,7 +144,7 @@ def run_clustering_pipeline(
         run.num_clusters_found = 0
         run.status = STATUS_COMPLETED
         run.completed_at = datetime.utcnow()
-        run.parameters = json.dumps({"trigger_source": trigger_source, "clusters_found": 0})
+        run.parameters = json.dumps({"trigger_source": trigger_source, "clusters_found": 0, **cluster_stats})
         db.commit()
         db.refresh(run)
         return run
@@ -215,6 +216,7 @@ def run_clustering_pipeline(
         "clusters_found": len(groups),
         "queries_clustered": total_clustered_queries,
         "queries_left_unclustered": len(records) - total_clustered_queries,
+        **cluster_stats,
     })
     db.commit()
     db.refresh(run)

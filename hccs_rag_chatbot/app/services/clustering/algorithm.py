@@ -1,5 +1,5 @@
 # app/services/clustering/algorithm.py
-from typing import Dict, List
+from typing import Dict, List, Optional
 
 import numpy as np
 from sklearn.cluster import AgglomerativeClustering
@@ -28,7 +28,14 @@ def _mean_center(vectors: np.ndarray) -> np.ndarray:
 def run_agglomerative_clustering(
     query_ids: List[int],
     vectors: np.ndarray,
+    stats: Optional[Dict] = None,
 ) -> Dict[int, List[int]]:
+    """Group queries into clusters on their mean-centered embeddings.
+
+    If `stats` (a dict) is passed in, it's populated with per-run diagnostics
+    (distance_threshold, min_cluster_size, raw_groups) so the caller can persist
+    them for fragmentation auditing. The return value is unchanged either way.
+    """
 
     n = len(query_ids)
     if n == 0:
@@ -82,6 +89,11 @@ def run_agglomerative_clustering(
         f"CLUSTERING_DISTANCE_THRESHOLD; if it collapses to 1-2 blobs, lower it "
         f"(run tune_threshold.py)."
     )
+
+    if stats is not None:
+        stats["distance_threshold"] = float(threshold)
+        stats["min_cluster_size"] = min_size
+        stats["raw_groups"] = len(raw_groups)
 
     return groups
 
