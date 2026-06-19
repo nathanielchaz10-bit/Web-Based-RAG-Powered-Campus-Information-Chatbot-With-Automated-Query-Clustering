@@ -16,6 +16,15 @@ def run_agglomerative_clustering(
     if n == 0:
         return {}
 
+    # Log the EFFECTIVE threshold so it's obvious which value the run used --
+    # the #1 cause of "only 1 cluster" is .env not actually setting this (so it
+    # falls back to the default) or being edited in the wrong file.
+    print(
+        f"[clustering agglomerative] {n} queries | "
+        f"cosine distance_threshold={settings.CLUSTERING_DISTANCE_THRESHOLD} | "
+        f"min_cluster_size={settings.CLUSTERING_MIN_CLUSTER_SIZE}"
+    )
+
     # Cluster on COSINE distance directly (distance = 1 - cosine similarity):
     # two queries are "close" when their embeddings point the same semantic
     # direction, regardless of magnitude. This is the natural metric for text
@@ -48,6 +57,14 @@ def run_agglomerative_clustering(
     min_size = settings.CLUSTERING_MIN_CLUSTER_SIZE
     surviving = [members for members in raw_groups.values() if len(members) >= min_size]
     groups = {label: members for label, members in enumerate(surviving)}
+
+    print(
+        f"[clustering agglomerative] raw groups={len(raw_groups)} -> "
+        f"{len(groups)} clusters (>= min size) covering "
+        f"{sum(len(m) for m in groups.values())}/{n} queries. "
+        f"If this is 1, lower CLUSTERING_DISTANCE_THRESHOLD; if it's near {n} "
+        f"singletons, raise it."
+    )
 
     return groups
 
