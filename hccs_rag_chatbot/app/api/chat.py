@@ -154,3 +154,97 @@ def chat(
         query_id=query.query_id,
         response_time_ms=result["response_time_ms"],
     )
+
+
+@router.get("/sessions")
+def get_user_sessions(
+        db: Session = Depends(get_db),
+        user: UserAccount = Depends(get_current_user)
+):
+    """Retrieve all chat sessions for the authenticated user."""
+    sessions = (
+        db.query(ChatSession)
+        .filter(ChatSession.user_id == user.user_id)
+        .order_by(ChatSession.last_activity.desc())
+        .all()
+    )
+
+    result = []
+    for s in sessions:
+        # Get the first query of the session to use as a title
+        first_query = (
+            db.query(QueryLog)
+            .filter(QueryLog.session_id == s.session_id)
+            .order_by(QueryLog.timestamp.asc())
+            .first()
+        )
+        title = first_query.query_text if first_query else "New Conversation"
+        # Truncate title if it's too long
+        title = title[:30] + "..." if len(title) > 30 else title
+
+        result.append({
+            "session_id": s.session_id,
+            "title": title,
+            "last_activity": s.last_activity.isoformat()
+        })
+    return result
+
+
+@router.get("/sessions/{session_id}/history")
+def get_session_history(
+        session_id: int,
+        db: Session = Depends(get_db),
+        user: UserAccount = Depends(get_current_user)
+):
+    """Retrieve the full turn history for a specific session."""
+    session = db.query(ChatSession).filter(
+        ChatSession.session_id == session_id,
+        ChatSession.user_id == user.user_id
+    ).first()
+
+    if not session:
+        raise HTTPException(status_code=404, detail="Session not found or access denied.")
+
+    queries = (
+        db.query(QueryLog)
+        .filter(QueryLog.session_id == session_id)
+        .order_by(QueryLog.timestamp.asc())
+        .all()
+    )
+
+    history = []
+    for q in queries:
+        # Add the user's query
+        history.append({
+            "role": "user",
+            "content": q.query_text
+        })
+        # Add the bot's response if it exists
+        if q.response:
+            history.append({
+                "role": "bot",
+                "content": q.response.response_text,
+                "sources": json.loads(q.response.source_chunks) if q.response.source_chunks else []
+            })
+    return history
+
+
+@router.delete("/sessions/{session_id}")
+def delete_session(
+        session_id: int,
+        db: Session = Depends(get_db),
+        user: UserAccount = Depends(get_current_user)
+):
+    """Delete a specific chat session and its history."""
+    session = db.query(ChatSession).filter(
+        ChatSession.session_id == session_id,
+        ChatSession.user_id == user.user_id
+    ).first()
+
+    if not session:
+        raise HTTPException(status_code=404, detail="Session not found")
+
+    db.delete(session)
+    db.commit()
+
+    return {"status": "success", "message": "Session deleted"}
