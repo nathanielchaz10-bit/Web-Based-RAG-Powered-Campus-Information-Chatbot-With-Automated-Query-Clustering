@@ -32,7 +32,10 @@ from contextlib import redirect_stdout
 import numpy as np
 from sklearn.metrics import adjusted_rand_score, normalized_mutual_info_score
 
-sys.path.append(os.path.dirname(os.path.abspath(__file__)))
+# Archived under archive/llm_clustering_experiment/; add the app root
+# (hccs_rag_chatbot/) so `import app...` and `database...` still resolve.
+sys.path.insert(0, os.path.abspath(
+    os.path.join(os.path.dirname(__file__), "..", "..", "hccs_rag_chatbot")))
 
 # Bridge GEMINI_API_KEY -> GOOGLE_API_KEY for the LLM method (same as pipeline).
 import app.services._engine_bootstrap  # noqa: F401
@@ -42,7 +45,7 @@ import app.models  # noqa: F401  registers ORM models
 from app.models.query_log import QueryLog
 from app.core.config import settings
 from app.services.clustering.algorithm import run_agglomerative_clustering
-from app.services.clustering.algorithm_llm import run_llm_clustering
+from algorithm_llm import run_llm_clustering  # archived sibling module
 from database.seed_queries import SAMPLE_QUERIES
 
 NOISE_TOPIC = "_noise"

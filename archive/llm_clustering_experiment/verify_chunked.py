@@ -19,12 +19,15 @@ import sys
 import numpy as np
 from sklearn.preprocessing import normalize
 
-sys.path.append(os.path.dirname(os.path.abspath(__file__)))
+# Archived under archive/llm_clustering_experiment/; add the app root
+# (hccs_rag_chatbot/) so `import app...` and `database...` still resolve.
+sys.path.insert(0, os.path.abspath(
+    os.path.join(os.path.dirname(__file__), "..", "..", "hccs_rag_chatbot")))
 
 import app.services._engine_bootstrap  # noqa: F401
 
 from app.core.config import settings
-from app.services.clustering.algorithm_llm import run_llm_clustering, _deduplicate
+from algorithm_llm import run_llm_clustering, _deduplicate  # archived sibling module
 from eval_dataset import build_dataset
 import bakeoff as B
 import bakeoff_large as BL

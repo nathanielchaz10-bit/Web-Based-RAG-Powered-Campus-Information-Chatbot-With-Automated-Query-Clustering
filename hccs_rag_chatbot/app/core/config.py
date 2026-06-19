@@ -56,24 +56,10 @@ class Settings(BaseSettings):
     CLUSTERING_MIN_QUERIES: int = 3
     CLUSTERING_SCHEDULE_HOUR: int = 2
 
-    # Minimum members for a group to survive as a cluster (shared by BOTH
-    # methods). Smaller groups are dropped as one-off noise rather than
-    # surfaced on the dashboard.
+    # Minimum members for a group to survive as a cluster. Smaller groups are
+    # dropped as one-off noise rather than surfaced on the dashboard.
     CLUSTERING_MIN_CLUSTER_SIZE: int = 3
 
-    # Which grouping strategy the pipeline uses to decide *which queries go
-    # together*. Both share the same embedding + LLM-labeling steps; only the
-    # grouping differs:
-    #   "agglomerative" -> sklearn AgglomerativeClustering on the embeddings
-    #                      (deterministic, cheap, scales freely; groups by
-    #                      embedding proximity).
-    #   "llm"           -> embeddings collapse near-duplicates, then the LLM
-    #                      groups the distinct queries by *intent* (better
-    #                      topic quality; non-deterministic; costs LLM calls).
-    # See app/services/clustering/algorithm.py vs algorithm_llm.py.
-    CLUSTERING_METHOD: str = "agglomerative"
-
-    # --- Agglomerative method tuning (ignored when METHOD != "agglomerative") -
     # Cosine DISTANCE at which clusters stop merging (distance = 1 - cosine
     # similarity). Two queries merge when their similarity is roughly
     # >= (1 - threshold). Lower -> more, tighter clusters; higher -> fewer,
@@ -85,17 +71,13 @@ class Settings(BaseSettings):
     # and pick the value that yields a sensible number of clusters.
     CLUSTERING_DISTANCE_THRESHOLD: float = 0.25
 
-    # --- LLM clustering method tuning (ignored when METHOD != "llm") --------
-    # Two queries whose normalized embeddings are at least this cosine-similar
-    # are treated as near-paraphrases and collapsed to one representative
-    # before the LLM grouping step, keeping the prompt small. Kept high so only
-    # genuine duplicates merge ("what is the tuition" / "how much is tuition").
+    # --- Archived LLM-clustering experiment ---------------------------------
+    # The pipeline uses agglomerative clustering only. An LLM-based alternative
+    # was evaluated and archived under archive/llm_clustering_experiment/ (the
+    # bake-off found no quality gain at scale and significant run-to-run
+    # instability). These two settings are read solely by those archived
+    # evaluation scripts and are otherwise unused by the running app.
     CLUSTERING_DEDUP_THRESHOLD: float = 0.95
-
-    # Scale safety net: once the number of *distinct* (post-dedup) queries
-    # exceeds this, the LLM grouping switches from a single prompt to a
-    # chunk-then-merge strategy so we never blow the model's context window.
-    # Sized for the ~1k–2k peak this deployment targets.
     CLUSTERING_LLM_MAX_ITEMS: int = 400
 
     # --- Development Mode ----------------------------------------------------
