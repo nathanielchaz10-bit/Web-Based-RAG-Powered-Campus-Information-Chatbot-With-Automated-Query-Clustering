@@ -15,6 +15,7 @@ from apscheduler.triggers.cron import CronTrigger
 from app.core.config import settings
 from app.core.database import SessionLocal
 from app.services.clustering.pipeline import run_clustering_pipeline
+from app.services.clustering.health_check import run_threshold_health_check
 
 _scheduler: BackgroundScheduler | None = None
 
@@ -42,6 +43,24 @@ def _scheduled_job():
         db.close()
 
 
+def _health_check_job():
+    """
+    Monthly wrapper run by APScheduler: checks whether the configured clustering
+    distance threshold still fits the accumulated data and records a
+    recommendation (system_metrics + logs) if it has drifted. Read-only w.r.t.
+    config — a human reviews and applies any change. Reads cached embeddings
+    only, so it's cheap (no re-embedding / LLM calls). Same last-resort guard as
+    the daily job so a failure can't kill the scheduler thread.
+    """
+    db = SessionLocal()
+    try:
+        run_threshold_health_check(db)
+    except Exception as exc:
+        print(f"[clustering scheduler] Unexpected error during threshold health-check: {exc!r}")
+    finally:
+        db.close()
+
+
 def start_scheduler() -> BackgroundScheduler:
     """
     Starts the background scheduler. Call once from main.py's startup.
@@ -62,8 +81,21 @@ def start_scheduler() -> BackgroundScheduler:
         id="daily_clustering_run",
         replace_existing=True,
     )
+    # Monthly threshold drift self-check: 1st of each month, 30 min after the
+    # daily run's hour so the two never overlap. Recommends (never auto-applies)
+    # a new CLUSTERING_DISTANCE_THRESHOLD if the data has drifted.
+    _scheduler.add_job(
+        _health_check_job,
+        trigger=CronTrigger(day=1, hour=settings.CLUSTERING_SCHEDULE_HOUR, minute=30),
+        id="monthly_threshold_health_check",
+        replace_existing=True,
+    )
     _scheduler.start()
-    print(f"[clustering scheduler] Started. Daily run scheduled for {settings.CLUSTERING_SCHEDULE_HOUR}:00 UTC.")
+    print(
+        f"[clustering scheduler] Started. Daily run at "
+        f"{settings.CLUSTERING_SCHEDULE_HOUR}:00 UTC; monthly threshold "
+        f"health-check on the 1st at {settings.CLUSTERING_SCHEDULE_HOUR}:30 UTC."
+    )
     return _scheduler
 
 
