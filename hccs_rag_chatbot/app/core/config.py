@@ -64,14 +64,12 @@ class Settings(BaseSettings):
     # similarity), applied to the MEAN-CENTERED embeddings (see algorithm.py;
     # centering is what makes a single threshold workable on anisotropic Gemini
     # vectors). Lower -> more, tighter clusters; higher -> fewer, broader.
-    #   "auto" (default): the cut height is derived from the data each run by
-    #     finding the largest gap in the merge-height dendrogram — no manual
-    #     tuning, and robust to data drift. Recommended.
-    #   <number>: pin an explicit cosine distance. Run `python tune_threshold.py`
-    #     to sweep your own cached vectors and pick a value (it also prints what
-    #     "auto" would choose, so you can compare before pinning).
-    # Stored as a string so it accepts both "auto" and a numeric value.
-    CLUSTERING_DISTANCE_THRESHOLD: str = "auto"
+    # Because centering pushes unrelated pairs apart, the useful value lives
+    # higher than it would on raw vectors. 0.85 was tuned on real cached vectors
+    # (8 balanced topic clusters, ~82% coverage, just below where topics start
+    # merging into blobs). Re-tune with `python tune_threshold.py` if you change
+    # embedding models or your query mix shifts.
+    CLUSTERING_DISTANCE_THRESHOLD: float = 0.85
 
     # --- Archived LLM-clustering experiment ---------------------------------
     # The pipeline uses agglomerative clustering only. An LLM-based alternative

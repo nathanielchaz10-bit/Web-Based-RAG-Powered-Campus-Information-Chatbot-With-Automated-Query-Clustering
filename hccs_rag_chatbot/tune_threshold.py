@@ -31,7 +31,7 @@ from app.core.database import SessionLocal
 import app.models  # noqa: F401  registers ORM models
 from app.models.query_log import QueryLog
 from app.core.config import settings
-from app.services.clustering.algorithm import _mean_center, _auto_distance_threshold
+from app.services.clustering.algorithm import _mean_center
 
 
 def load_vectors():
@@ -92,10 +92,8 @@ def main():
         "means topics are separable by a single threshold.)\n"
     )
 
-    auto_th = _auto_distance_threshold(centered)
     print(f"Min cluster size (dropped below this): {min_size}")
-    print(f"Current .env / default threshold:      {settings.CLUSTERING_DISTANCE_THRESHOLD}")
-    print(f"What \"auto\" would pick on this data:   {auto_th:.3f}\n")
+    print(f"Current .env / default threshold:      {settings.CLUSTERING_DISTANCE_THRESHOLD}\n")
 
     header = f"{'threshold':>9} | {'clusters':>8} | {'clustered':>9} | {'coverage':>8} | sizes"
     print(header)
@@ -124,35 +122,29 @@ def main():
         )
 
     print()
-    # Recommend the MIDDLE of the most stable plateau rather than an edge value:
-    # a threshold sitting in a wide band that all yield the same sensible
-    # cluster count is the most robust to data drift on the next run.
-    valid = [(th, k, cov) for th, k, cov in rows if 2 <= k <= 30 and cov >= 0.5]
+    # Suggest the MOST-RESOLVED split: the threshold giving the highest number
+    # of surviving clusters (tie-broken by coverage). As the threshold rises,
+    # cluster count climbs (queries clear the min-size bar) then falls again as
+    # distinct topics merge into blobs, so this peak sits right at "as many real
+    # topic groups as the data supports, just before they start merging."
+    valid = [(th, k, cov) for th, k, cov in rows if 2 <= k <= 30 and cov >= 0.4]
     if valid:
-        # Most common cluster count among valid thresholds = the stable plateau.
-        from collections import Counter
-        plateau_k = Counter(k for _, k, _ in valid).most_common(1)[0][0]
-        plateau_ths = [th for th, k, _ in valid if k == plateau_k]
-        pick = plateau_ths[len(plateau_ths) // 2]
-        cov = next(c for th, k, c in valid if th == pick and k == plateau_k)
+        pick, k, cov = max(valid, key=lambda r: (r[1], r[2]))
         print(
-            f"Stable plateau: {plateau_k} clusters around "
-            f"CLUSTERING_DISTANCE_THRESHOLD={pick} ({cov:.0%} of queries "
-            f"clustered). \"auto\" picked {auto_th:.3f}."
+            f"Suggested: CLUSTERING_DISTANCE_THRESHOLD={pick} "
+            f"-> {k} clusters, {cov:.0%} of queries clustered "
+            f"(the most-resolved split before topics merge into blobs)."
         )
         print(
-            "Default is CLUSTERING_DISTANCE_THRESHOLD=auto (no tuning needed). "
-            "Pin a value only if you want to override — e.g. nudge lower for "
-            f"more/tighter clusters or higher for fewer/broader; {pick} is the "
-            "middle of the most stable band here. Set it in .env and restart "
-            "uvicorn."
+            "Adjust to taste: lower = more/tighter clusters, higher = "
+            "fewer/broader (too high merges topics into blobs). Set it in .env "
+            "and restart uvicorn."
         )
     else:
         print(
-            "No swept threshold gave a clean 2–30 cluster split, but \"auto\" "
-            f"derives its cut from the data ({auto_th:.3f}) and isn't limited to "
-            "this grid — leaving CLUSTERING_DISTANCE_THRESHOLD=auto is usually "
-            "the safest choice here."
+            "No swept threshold gave a clean 2-30 cluster split with decent "
+            "coverage — extend the sweep range above, or your query mix may be "
+            "too small/uniform to cluster meaningfully yet."
         )
     print()
 
