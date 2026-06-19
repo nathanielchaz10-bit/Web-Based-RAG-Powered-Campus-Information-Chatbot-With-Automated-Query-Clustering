@@ -76,13 +76,14 @@ class Settings(BaseSettings):
     # --- Agglomerative method tuning (ignored when METHOD != "agglomerative") -
     # Cosine DISTANCE at which clusters stop merging (distance = 1 - cosine
     # similarity). Two queries merge when their similarity is roughly
-    # >= (1 - threshold), so 0.40 groups queries with cosine similarity ~0.60+.
-    # Lower -> more, tighter clusters; higher -> fewer, broader clusters.
-    # NOTE: the previous default effectively required ~0.94 similarity
-    # (near-duplicate level), which fragmented everything into singletons and
-    # left only one accidental cluster surviving the min-size filter. Tune this
-    # against a labeled sample for best results on your own data.
-    CLUSTERING_DISTANCE_THRESHOLD: float = 0.40
+    # >= (1 - threshold). Lower -> more, tighter clusters; higher -> fewer,
+    # broader (too high merges everything into one blob).
+    # The right value depends on your embeddings' distribution: Gemini
+    # embeddings are anisotropic (even unrelated queries sit fairly similar),
+    # so a smallish threshold is needed to separate topics. Run
+    # `python tune_threshold.py` to sweep this against your own cached vectors
+    # and pick the value that yields a sensible number of clusters.
+    CLUSTERING_DISTANCE_THRESHOLD: float = 0.25
 
     # --- LLM clustering method tuning (ignored when METHOD != "llm") --------
     # Two queries whose normalized embeddings are at least this cosine-similar
