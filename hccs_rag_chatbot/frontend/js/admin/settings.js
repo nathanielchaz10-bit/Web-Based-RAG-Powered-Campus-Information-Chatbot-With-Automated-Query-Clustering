@@ -87,6 +87,33 @@ async function addAdmin() {
     document.getElementById('new-admin-email').value = '';
 }
 
+// ── Header search: filter the Admin Management table ──
+// The only list on this page is the admins table, so typing in the header
+// search jumps to that tab and hides rows whose name/email/role don't match.
+function wireSettingsSearch() {
+    const input = document.querySelector('.search-bar input');
+    const tbody = document.getElementById('admins-tbody');
+    if (!input || !tbody) return;
+
+    input.addEventListener('input', () => {
+        const term = input.value.trim().toLowerCase();
+
+        if (term) {
+            const adminsTab = Array.from(document.querySelectorAll('.settings-tab'))
+                .find(b => (b.getAttribute('onclick') || '').includes("'admins'"));
+            if (adminsTab && !adminsTab.classList.contains('active')) {
+                switchTab(adminsTab, 'admins');
+            }
+        }
+
+        tbody.querySelectorAll('tr').forEach(tr => {
+            tr.style.display = tr.textContent.toLowerCase().includes(term) ? '' : 'none';
+        });
+    });
+}
+
+document.addEventListener('DOMContentLoaded', wireSettingsSearch);
+
 // ── Route guard on load ──
 // Mirror the other admin pages (dashboard.js / clusters.js): an unauthenticated
 // or non-admin visitor is redirected to login by requireAdmin(). Guarded with a

@@ -15,6 +15,9 @@ document.addEventListener("DOMContentLoaded", async () => {
         loadRecentInquiries()
     ]);
 
+    // 4. Wire the header search to filter the recent-inquiries table
+    wireDashboardSearch();
+
 });
 
 
@@ -180,47 +183,71 @@ async function loadSystemHealth() {
 }
 
 
+// Recent inquiries are cached so the header search can filter them client-side
+// (by question text, student email, intent or sentiment) without re-fetching.
+let recentInquiries = [];
+let inquirySearchTerm = "";
+
 async function loadRecentInquiries() {
     try {
         const data = await apiGet("/dashboard/recent-inquiries");
-
-        const tbody = document.getElementById("inquiries-tbody");
-        tbody.innerHTML = "";
-
-        if (data.length === 0) {
-            tbody.innerHTML = `
-                <tr>
-                    <td colspan="5" class="empty-state">
-                        No queries yet.
-                    </td>
-                </tr>
-            `;
-            return;
-        }
-
-        data.forEach(row => {
-            const tr = document.createElement("tr");
-            tr.innerHTML = `
-                <td>${row.timestamp}</td>
-                <td>${escapeHtml(row.query_text)}</td>
-                <td class="text-secondary">${row.user_email}</td>
-                <td>
-                    <span class="intent-pill ${intentClass(row.intent)}">
-                        ${row.intent}
-                    </span>
-                </td>
-                <td>
-                    <span class="sentiment ${sentimentClass(row.sentiment)}">
-                        ${row.sentiment}
-                    </span>
-                </td>
-            `;
-            tbody.appendChild(tr);
-        });
-
+        recentInquiries = Array.isArray(data) ? data : [];
+        renderInquiries();
     } catch (err) {
         showError("inquiries-tbody", "Could not load recent inquiries.");
     }
+}
+
+function renderInquiries() {
+    const tbody = document.getElementById("inquiries-tbody");
+    if (!tbody) return;
+
+    const term = inquirySearchTerm.trim().toLowerCase();
+    const rows = term
+        ? recentInquiries.filter(r =>
+            `${r.query_text} ${r.user_email} ${r.intent} ${r.sentiment}`.toLowerCase().includes(term))
+        : recentInquiries;
+
+    tbody.innerHTML = "";
+
+    if (!rows.length) {
+        const msg = term ? "No inquiries match your search." : "No queries yet.";
+        tbody.innerHTML = `
+            <tr>
+                <td colspan="5" class="empty-state">${msg}</td>
+            </tr>
+        `;
+        return;
+    }
+
+    rows.forEach(row => {
+        const tr = document.createElement("tr");
+        tr.innerHTML = `
+            <td>${row.timestamp}</td>
+            <td>${escapeHtml(row.query_text)}</td>
+            <td class="text-secondary">${row.user_email}</td>
+            <td>
+                <span class="intent-pill ${intentClass(row.intent)}">
+                    ${row.intent}
+                </span>
+            </td>
+            <td>
+                <span class="sentiment ${sentimentClass(row.sentiment)}">
+                    ${row.sentiment}
+                </span>
+            </td>
+        `;
+        tbody.appendChild(tr);
+    });
+}
+
+function wireDashboardSearch() {
+    const input = document.querySelector(".search-bar input");
+    if (!input) return;
+    input.addEventListener("input", (e) => {
+        inquirySearchTerm = e.target.value || "";
+        renderInquiries();
+    });
 }
 
 
