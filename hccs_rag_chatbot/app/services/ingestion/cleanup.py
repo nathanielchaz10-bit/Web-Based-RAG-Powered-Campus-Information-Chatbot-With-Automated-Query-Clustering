@@ -27,14 +27,11 @@ _CLEANUP_PROMPT = (
 
 def llm_clean(text: str) -> str:
     """Return an LLM-cleaned version of ``text`` (requires GEMINI_API_KEY)."""
+    import app.services._engine_bootstrap  # noqa: F401  (loads .env + bridges the API key)
     from langchain_core.messages import HumanMessage
     from langchain_google_genai import ChatGoogleGenerativeAI
 
-    llm = ChatGoogleGenerativeAI(
-        model=settings.LLM_MODEL,
-        temperature=0,
-        google_api_key=settings.GEMINI_API_KEY or None,
-    )
+    llm = ChatGoogleGenerativeAI(model=settings.LLM_MODEL, temperature=0)
     resp = llm.invoke(
         [HumanMessage(content=f"{_CLEANUP_PROMPT}\n\n---\n{text}")]
     )

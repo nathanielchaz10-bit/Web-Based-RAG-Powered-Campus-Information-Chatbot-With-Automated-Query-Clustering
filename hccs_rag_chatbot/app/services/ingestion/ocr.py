@@ -70,15 +70,14 @@ def gemini_vision_ocr(path: str, dpi: int | None = None) -> str:
     import base64
     import io
 
+    import app.services._engine_bootstrap  # noqa: F401  (loads .env + bridges the API key)
     from langchain_core.messages import HumanMessage
     from langchain_google_genai import ChatGoogleGenerativeAI
 
     dpi = dpi or min(settings.INGEST_OCR_DPI, 200)
-    llm = ChatGoogleGenerativeAI(
-        model=settings.LLM_MODEL,
-        temperature=0,
-        google_api_key=settings.GEMINI_API_KEY or None,
-    )
+    # Key comes from the environment via _engine_bootstrap, same as the RAG
+    # engine -- works whether .env defines GEMINI_API_KEY or GOOGLE_API_KEY.
+    llm = ChatGoogleGenerativeAI(model=settings.LLM_MODEL, temperature=0)
 
     pages = []
     for img in _render_pdf_pages(path, dpi):
