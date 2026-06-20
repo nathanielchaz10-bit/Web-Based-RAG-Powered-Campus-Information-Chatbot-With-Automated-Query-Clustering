@@ -156,6 +156,20 @@ def chat(
     )
 
 
+# === NEW ENDPOINT: Initialize a fresh session ===
+@router.post("/sessions/new")
+def create_new_session(
+    db: Session = Depends(get_db),
+    user: UserAccount = Depends(get_current_user)
+):
+    """Explicitly create a new session record."""
+    session = ChatSession(user_id=user.user_id)
+    db.add(session)
+    db.commit()
+    db.refresh(session)
+    return {"session_id": session.session_id}
+
+
 @router.get("/sessions")
 def get_user_sessions(
         db: Session = Depends(get_db),
@@ -178,9 +192,9 @@ def get_user_sessions(
             .order_by(QueryLog.timestamp.asc())
             .first()
         )
-        title = first_query.query_text if first_query else "New Conversation"
-        # Truncate title if it's too long
-        title = title[:30] + "..." if len(title) > 30 else title
+
+        # Fallback to "New Conversation" if there are no messages yet
+        title = first_query.query_text[:30] + "..." if (first_query and len(first_query.query_text) > 30) else (first_query.query_text if first_query else "New Conversation")
 
         result.append({
             "session_id": s.session_id,
