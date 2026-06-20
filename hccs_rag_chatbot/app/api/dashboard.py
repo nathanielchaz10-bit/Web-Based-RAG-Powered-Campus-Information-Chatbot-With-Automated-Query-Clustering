@@ -10,6 +10,7 @@ Endpoint shapes match what frontend/js/admin/dashboard.js already expects:
 from datetime import datetime, timedelta
 
 from fastapi import APIRouter, Depends
+from sqlalchemy import or_
 from sqlalchemy.orm import Session
 
 from app.api.deps import require_admin
@@ -119,30 +120,54 @@ def system_health(db: Session = Depends(get_db), _: UserAccount = Depends(requir
 
 @router.get("/recent-inquiries")
 def recent_inquiries(
-    limit: int = 10,
+    page: int = 1,
+    page_size: int = 10,
+    q: str = "",
     db: Session = Depends(get_db),
     _: UserAccount = Depends(require_admin),
 ):
-    """Most recent student inquiries, newest first.
+    """Student inquiries, newest first, paginated.
 
-    `limit` caps how many rows are returned (default 10, what the dashboard
-    shows at rest). The "View All Activity" toggle passes limit<=0 to fetch the
-    full history.
+    Returns {items, total, page, page_size}. The dashboard shows page 1 at
+    page_size 10 by default; "View All Activity" pages through the full history
+    and passes `q` to search across question text, student email, intent and
+    sentiment server-side (so search spans everything, not just one page).
     """
-    query = db.query(QueryLog).order_by(QueryLog.query_id.desc())
-    if limit and limit > 0:
-        query = query.limit(limit)
-    rows = query.all()
-    out = []
-    for q in rows:
+    if page < 1:
+        page = 1
+    if page_size < 1:
+        page_size = 10
+
+    base = db.query(QueryLog).order_by(QueryLog.query_id.desc())
+
+    term = q.strip()
+    if term:
+        like = f"%{term}%"
+        base = (
+            base.outerjoin(ChatSession, QueryLog.session_id == ChatSession.session_id)
+            .outerjoin(UserAccount, ChatSession.user_id == UserAccount.user_id)
+            .filter(or_(
+                QueryLog.query_text.ilike(like),
+                QueryLog.detected_intent.ilike(like),
+                QueryLog.sentiment.ilike(like),
+                UserAccount.email.ilike(like),
+            ))
+        )
+
+    total = base.count()
+    rows = base.offset((page - 1) * page_size).limit(page_size).all()
+
+    items = []
+    for qr in rows:
         email = "—"
-        if q.session and q.session.user:
-            email = q.session.user.email
-        out.append({
-            "timestamp": q.timestamp.strftime("%Y-%m-%d %H:%M") if q.timestamp else "",
-            "query_text": q.query_text,
+        if qr.session and qr.session.user:
+            email = qr.session.user.email
+        items.append({
+            "timestamp": qr.timestamp.strftime("%Y-%m-%d %H:%M") if qr.timestamp else "",
+            "query_text": qr.query_text,
             "user_email": email,
-            "intent": q.detected_intent or "General",
-            "sentiment": q.sentiment or "Neutral",
+            "intent": qr.detected_intent or "General",
+            "sentiment": qr.sentiment or "Neutral",
         })
-    return out
+
+    return {"items": items, "total": total, "page": page, "page_size": page_size}

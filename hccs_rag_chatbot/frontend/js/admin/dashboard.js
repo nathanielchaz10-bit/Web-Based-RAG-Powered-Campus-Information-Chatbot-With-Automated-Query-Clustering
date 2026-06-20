@@ -184,20 +184,37 @@ async function loadSystemHealth() {
 }
 
 
-// Recent inquiries are cached so the header search can filter them client-side
-// (by question text, student email, intent or sentiment) without re-fetching.
-// "View All Activity" swaps the capped recent set for the full history, which
-// also makes the search meaningful (it searches whatever is currently loaded).
-let recentInquiries = [];
+// The inquiries table has two modes:
+//   - Compact (default): page 1, 10 rows. The header search filters these
+//     loaded rows client-side — cheap, no round-trips.
+//   - Browse ("View All Activity"): the full history, paginated server-side,
+//     with the header search querying the server so it spans every page.
+const BROWSE_PAGE_SIZE = 15;
+let recentInquiries = [];      // rows currently loaded into the table
 let inquirySearchTerm = "";
 let showingAllActivity = false;
+let currentPage = 1;
+let totalInquiries = 0;
+let searchDebounce = null;
 
 async function loadRecentInquiries() {
     try {
-        const limit = showingAllActivity ? 0 : 10; // limit<=0 -> full history
-        const data = await apiGet(`/dashboard/recent-inquiries?limit=${limit}`);
-        recentInquiries = Array.isArray(data) ? data : [];
+        const params = new URLSearchParams();
+        if (showingAllActivity) {
+            params.set("page", currentPage);
+            params.set("page_size", BROWSE_PAGE_SIZE);
+            params.set("q", inquirySearchTerm.trim());
+        } else {
+            params.set("page", 1);
+            params.set("page_size", 10);
+        }
+
+        const data = await apiGet(`/dashboard/recent-inquiries?${params.toString()}`);
+        recentInquiries = Array.isArray(data?.items) ? data.items : [];
+        totalInquiries = typeof data?.total === "number" ? data.total : recentInquiries.length;
+
         renderInquiries();
+        renderPager();
     } catch (err) {
         showError("inquiries-tbody", "Could not load recent inquiries.");
     }
@@ -210,17 +227,46 @@ function wireViewAllActivity() {
     link.addEventListener("click", async (e) => {
         e.preventDefault();
         showingAllActivity = !showingAllActivity;
+        currentPage = 1;
 
         link.textContent = showingAllActivity ? "SHOW RECENT ONLY" : "VIEW ALL ACTIVITY";
         const heading = document.getElementById("inquiries-heading");
         if (heading) {
             heading.textContent = showingAllActivity ? "ALL STUDENT INQUIRIES" : "RECENT STUDENT INQUIRIES";
         }
-        // Cap the height + scroll only when the full list is shown, so a long
-        // history doesn't push the rest of the page down.
+        // Cap the height + scroll in browse mode so a full page of rows doesn't
+        // push the rest of the dashboard down.
         document.querySelector(".table-responsive")?.classList.toggle("expanded", showingAllActivity);
 
         await loadRecentInquiries();
+    });
+}
+
+function renderPager() {
+    const pager = document.getElementById("inquiries-pager");
+    if (!pager) return;
+
+    if (!showingAllActivity) {
+        pager.classList.add("hidden");
+        pager.innerHTML = "";
+        return;
+    }
+
+    const totalPages = Math.max(1, Math.ceil(totalInquiries / BROWSE_PAGE_SIZE));
+    if (currentPage > totalPages) currentPage = totalPages;
+
+    pager.classList.remove("hidden");
+    pager.innerHTML = `
+        <button class="pager-btn" id="pager-prev" ${currentPage <= 1 ? "disabled" : ""}>Prev</button>
+        <span class="pager-info">Page ${currentPage} of ${totalPages} · ${totalInquiries.toLocaleString()} total</span>
+        <button class="pager-btn" id="pager-next" ${currentPage >= totalPages ? "disabled" : ""}>Next</button>
+    `;
+
+    document.getElementById("pager-prev")?.addEventListener("click", () => {
+        if (currentPage > 1) { currentPage--; loadRecentInquiries(); }
+    });
+    document.getElementById("pager-next")?.addEventListener("click", () => {
+        if (currentPage < totalPages) { currentPage++; loadRecentInquiries(); }
     });
 }
 
@@ -228,8 +274,10 @@ function renderInquiries() {
     const tbody = document.getElementById("inquiries-tbody");
     if (!tbody) return;
 
+    // In browse mode the server already filtered + paginated; only the compact
+    // mode filters its 10 loaded rows on the client.
     const term = inquirySearchTerm.trim().toLowerCase();
-    const rows = term
+    const rows = (!showingAllActivity && term)
         ? recentInquiries.filter(r =>
             `${r.query_text} ${r.user_email} ${r.intent} ${r.sentiment}`.toLowerCase().includes(term))
         : recentInquiries;
@@ -272,7 +320,15 @@ function wireDashboardSearch() {
     if (!input) return;
     input.addEventListener("input", (e) => {
         inquirySearchTerm = e.target.value || "";
-        renderInquiries();
+        if (showingAllActivity) {
+            // Browse mode: search the server across all pages (debounced, and
+            // reset to the first page of results).
+            currentPage = 1;
+            clearTimeout(searchDebounce);
+            searchDebounce = setTimeout(loadRecentInquiries, 250);
+        } else {
+            renderInquiries();
+        }
     });
 }
 
