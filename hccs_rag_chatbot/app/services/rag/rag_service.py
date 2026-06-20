@@ -64,9 +64,15 @@ def answer_query(question: str, chat_history: list[tuple[str, str]] | None = Non
     answer = results.get("answer", "")
     context_docs = results.get("context", [])
 
+    # The history-aware chain rewrites follow-ups into a self-contained
+    # question; surface it so the caller can log it for clustering. Falls back
+    # to the original question for first turns (no rewrite happened).
+    resolved_question = (results.get("standalone_question") or question).strip()
+
     return {
         "answer": answer,
         "sources": _extract_sources(context_docs),
         "response_time_ms": response_time_ms,
         "num_context_docs": len(context_docs),
+        "resolved_question": resolved_question,
     }

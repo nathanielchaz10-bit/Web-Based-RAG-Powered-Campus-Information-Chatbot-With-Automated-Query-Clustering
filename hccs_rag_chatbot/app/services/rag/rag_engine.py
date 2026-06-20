@@ -98,9 +98,16 @@ class HistoryAwareRagChain:
         else:
             standalone = question
 
-        return self._retrieval.invoke(
+        result = self._retrieval.invoke(
             {"input": standalone, "chat_history": history}, *args, **kwargs
         )
+
+        # Surface the resolved standalone question so callers can persist it
+        # (used for query clustering, which needs context-free questions).
+        # No extra cost -- it was already computed above.
+        if isinstance(result, dict):
+            result["standalone_question"] = standalone
+        return result
 
 
 def load_documents_from_folder(folder_path):

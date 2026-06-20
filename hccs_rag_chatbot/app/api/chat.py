@@ -124,8 +124,15 @@ def chat(
 
     sentiment, detected_intent = _classify(message)
 
+    # The chain rewrites follow-ups into a self-contained question; persist it
+    # only when it actually differs from what the student typed, so first-turn
+    # rows stay NULL and clustering can COALESCE back to query_text.
+    resolved = (result.get("resolved_question") or "").strip()
+    resolved_query_text = resolved if resolved and resolved != message else None
+
     query = QueryLog(
         query_text=message,
+        resolved_query_text=resolved_query_text,
         session_id=session.session_id,
         timestamp=datetime.utcnow(),
         response_time_ms=result["response_time_ms"],

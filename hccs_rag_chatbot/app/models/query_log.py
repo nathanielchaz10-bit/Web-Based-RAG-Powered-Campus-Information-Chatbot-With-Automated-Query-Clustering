@@ -13,6 +13,18 @@ class QueryLog(Base):
 
     # Query content
     query_text = Column(Text, nullable=False)
+
+    # The history-aware RAG chain rewrites follow-up questions into a
+    # self-contained ("standalone") form before retrieval, e.g.
+    #   "what about transferees?" -> "What are the enrollment requirements
+    #   for transferees?"
+    # We persist that resolved form here so clustering operates on questions
+    # that make sense out of conversational context. NULL when no rewrite
+    # happened (first turn / no history) -- consumers COALESCE back to
+    # query_text. query_text always keeps the student's original wording for
+    # history display and auditing.
+    resolved_query_text = Column(Text, nullable=True)
+
     query_vector = Column(Text, nullable=True)
 
     # Timestamps

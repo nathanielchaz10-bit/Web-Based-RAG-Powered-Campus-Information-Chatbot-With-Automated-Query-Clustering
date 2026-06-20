@@ -3,7 +3,7 @@
 from dataclasses import dataclass
 from typing import List
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
@@ -52,10 +52,17 @@ def fetch_clusterable_queries(db: Session) -> List[QueryRecord]:
         InsufficientQueriesError: if fewer than settings.CLUSTERING_MIN_QUERIES
             valid queries are found.
     """
+    # Cluster on the resolved (standalone) question when one was stored -- it's
+    # the context-free rewrite of a follow-up and groups far better than the
+    # raw fragment. Falls back to query_text for first-turn / un-rewritten rows.
+    clustering_text = func.coalesce(
+        QueryLog.resolved_query_text, QueryLog.query_text
+    ).label("query_text")
+
     try:
         rows = (
             db.execute(
-                select(QueryLog.query_id, QueryLog.query_text)
+                select(QueryLog.query_id, clustering_text)
                 .where(QueryLog.is_valid.is_(True))
                 .where(QueryLog.query_text.isnot(None))
             )
