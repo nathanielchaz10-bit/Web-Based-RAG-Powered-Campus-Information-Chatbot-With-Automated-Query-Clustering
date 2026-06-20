@@ -351,16 +351,56 @@ function renderClusterQueries() {
     }).join("");
 }
 
+async function loadSentimentQueries(bucket) {
+    const modal = document.getElementById("sentiment-modal");
+    const body = document.getElementById("sentiment-modal-body");
+    const title = document.getElementById("sentiment-modal-title");
+    if (!modal || !body) return;
+
+    if (title) title.textContent = "Sentiment Queries";
+    body.innerHTML = `<p class="placeholder-note">Loading queries…</p>`;
+    modal.classList.remove("hidden");
+
+    let data;
+    try {
+        data = await apiGet(`/clusters/sentiment/${bucket}/queries`);
+    } catch (err) {
+        console.error("Could not load sentiment queries:", err);
+        body.innerHTML = `<p class="placeholder-note">Could not load queries. Please try again.</p>`;
+        return;
+    }
+
+    if (title) title.textContent = `${data.title || "Sentiment"} (${data.query_count || 0})`;
+
+    const rows = Array.isArray(data.queries) ? data.queries : [];
+    if (!rows.length) {
+        body.innerHTML = `<p class="placeholder-note">No queries in this sentiment bucket.</p>`;
+        return;
+    }
+
+    body.innerHTML = rows.map(q => {
+        const intent = q.detected_intent ? `<span class="qrow-tag">${escapeHtml(q.detected_intent)}</span>` : "";
+        const sentiment = q.sentiment ? `<span class="qrow-tag">${escapeHtml(q.sentiment)}</span>` : "";
+        return `
+            <div class="qrow">
+                <p class="qrow-text">${escapeHtml(q.query_text)}</p>
+                <div class="qrow-meta">
+                    ${intent}
+                    ${sentiment}
+                </div>
+            </div>`;
+    }).join("");
+}
+
 function wireModalLogic() {
     try {
-        const sentimentModal = document.getElementById('sentiment-modal');
         const queriesModal = document.getElementById('queries-modal');
         const queriesModalTitle = document.getElementById('queries-modal-title');
 
+        // Sentiment distribution rows: clicking one lists the queries in that
+        // sentiment bucket.
         document.querySelectorAll('.sentiment-row.clickable-row').forEach(row => {
-            row.addEventListener('click', () => {
-                if (sentimentModal) sentimentModal.classList.remove('hidden');
-            });
+            row.addEventListener('click', () => loadSentimentQueries(row.dataset.sentiment));
         });
 
         // Cluster cards are rendered dynamically, so this listens on the
@@ -396,8 +436,7 @@ function wireModalLogic() {
 
         document.querySelectorAll('.close-ui-btn').forEach(btn => {
             btn.addEventListener('click', () => {
-                if (sentimentModal) sentimentModal.classList.add('hidden');
-                if (queriesModal) queriesModal.classList.add('hidden');
+                btn.closest('.ui-overlay')?.classList.add('hidden');
             });
         });
 

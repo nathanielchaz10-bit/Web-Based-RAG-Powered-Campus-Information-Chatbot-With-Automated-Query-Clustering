@@ -260,3 +260,62 @@ def cluster_queries(
         "low_confidence_threshold": LOW_CONFIDENCE_THRESHOLD,
         "queries": queries,
     }
+
+
+# Human-readable titles for each sentiment bucket the clusters page renders.
+_SENTIMENT_BUCKET_TITLES = {
+    "positive": "Positive / Inquisitive",
+    "neutral": "Neutral / Transactional",
+    "urgent": "Urgent / Frustrated",
+}
+
+
+def _sentiment_bucket_of(label: str) -> str:
+    """Map a stored sentiment label onto one of the three dashboard buckets."""
+    if label in _POSITIVE_LABELS:
+        return "positive"
+    if label in _URGENT_LABELS:
+        return "urgent"
+    return "neutral"
+
+
+@router.get("/sentiment/{bucket}/queries")
+def sentiment_queries(
+    bucket: str,
+    db: Session = Depends(get_db),
+    user: UserAccount = Depends(get_current_user),
+):
+    """Queries belonging to one sentiment bucket (positive/neutral/urgent).
+
+    Backs the Sentiment Distribution rows on the Query Clusters page: clicking
+    a bar lists the student queries classified into that bucket, newest first.
+    """
+    bucket = bucket.lower()
+    if bucket not in _SENTIMENT_BUCKET_TITLES:
+        raise HTTPException(status_code=404, detail="Unknown sentiment bucket.")
+
+    rows = (
+        db.query(QueryLog)
+        .filter(QueryLog.sentiment.isnot(None))
+        .order_by(QueryLog.timestamp.desc())
+        .all()
+    )
+
+    queries = [
+        {
+            "query_id": q.query_id,
+            "query_text": q.query_text,
+            "timestamp": q.timestamp.isoformat() if q.timestamp else None,
+            "sentiment": q.sentiment,
+            "detected_intent": q.detected_intent,
+        }
+        for q in rows
+        if _sentiment_bucket_of(q.sentiment) == bucket
+    ]
+
+    return {
+        "bucket": bucket,
+        "title": _SENTIMENT_BUCKET_TITLES[bucket],
+        "query_count": len(queries),
+        "queries": queries,
+    }

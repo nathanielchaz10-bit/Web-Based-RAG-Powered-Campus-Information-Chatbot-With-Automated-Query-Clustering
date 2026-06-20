@@ -425,6 +425,10 @@ body {
 .card-sm-title { font-size: 11px; font-weight: 600; color: #94a3b8; letter-spacing: 0.5px; margin-bottom: 16px; }
 .sentiment-row { margin-bottom: 16px; }
 .sentiment-row:last-child { margin-bottom: 0; }
+/* Clickable sentiment rows open a modal listing that bucket's queries. */
+.sentiment-row.clickable-row { cursor: pointer; padding: 6px 8px; margin: 0 -8px 10px; border-radius: 8px; transition: background 0.15s ease; }
+.sentiment-row.clickable-row:last-child { margin-bottom: 0; }
+.sentiment-row.clickable-row:hover { background: #f8fafc; }
 .sent-labels { display: flex; justify-content: space-between; font-size: 12px; font-weight: 600; color: #475569; margin-bottom: 6px; }
 .sent-bar { height: 6px; background: #f1f5f9; border-radius: 3px; overflow: hidden; }
 .sent-fill { height: 100%; border-radius: 3px; }

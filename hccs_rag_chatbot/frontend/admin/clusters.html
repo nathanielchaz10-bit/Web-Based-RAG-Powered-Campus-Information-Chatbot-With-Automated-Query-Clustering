@@ -145,18 +145,18 @@
     </div>
 
     <div id="sentiment-modal" class="ui-overlay hidden">
-        <div class="ui-modal-content">
+        <div class="ui-modal-content wide-modal">
             <div class="modal-header">
-                <h3>Urgent / Frustrated Drivers</h3>
+                <div>
+                    <h3 id="sentiment-modal-title">Sentiment Queries</h3>
+                    <p class="modal-subtitle">Student queries classified into this sentiment.</p>
+                </div>
                 <button class="icon-btn close-ui-btn">
                     <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
                 </button>
             </div>
-            <div class="modal-body">
-                <p class="modal-desc">Top AI-extracted reasons driving negative sentiment for this period.</p>
-                <ul class="driver-list" id="sentiment-drivers-list">
-                    <li><span class="driver-title">No data yet</span></li>
-                </ul>
+            <div class="modal-body scrollable-body" id="sentiment-modal-body">
+                <p class="placeholder-note">No queries loaded yet.</p>
             </div>
         </div>
     </div>
