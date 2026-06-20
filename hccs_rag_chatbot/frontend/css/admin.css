@@ -384,25 +384,25 @@ body {
 .snippet { font-weight: 500; color: #1e293b; }
 
 /* Dynamic Table Badges */
+/* Intent: colour-coded text only (no box). */
 .intent-badge,
-.intent-pill { padding: 4px 10px; border-radius: 6px; font-size: 12px; font-weight: 600; display: inline-block; white-space: nowrap; }
-.intent-blue { background-color: #eff6ff; color: #2563eb; }
-.intent-purple { background-color: #faf5ff; color: #9333ea; }
-.intent-grey { background-color: #f1f5f9; color: #475569; }
-.intent-amber { background-color: #fffbeb; color: #d97706; }
-.intent-teal { background-color: #f0fdfa; color: #0d9488; }
-.intent-indigo { background-color: #eef2ff; color: #4f46e5; }
-.intent-cyan { background-color: #ecfeff; color: #0891b2; }
-.intent-rose { background-color: #fff1f2; color: #e11d48; }
-.intent-green { background-color: #f0fdf4; color: #16a34a; }
-.intent-pink { background-color: #fdf2f8; color: #db2777; }
+.intent-pill { font-size: 12px; font-weight: 600; display: inline-block; white-space: nowrap; }
+.intent-blue { color: #2563eb; }
+.intent-purple { color: #9333ea; }
+.intent-grey { color: #475569; }
+.intent-amber { color: #d97706; }
+.intent-teal { color: #0d9488; }
+.intent-indigo { color: #4f46e5; }
+.intent-cyan { color: #0891b2; }
+.intent-rose { color: #e11d48; }
+.intent-green { color: #16a34a; }
+.intent-pink { color: #db2777; }
 
-.sentiment { display: inline-flex; align-items: center; gap: 7px; font-weight: 600; font-size: 13px; }
-/* Leading status dot, tinted to match each sentiment's text colour. */
-.sentiment::before { content: ""; width: 8px; height: 8px; border-radius: 50%; background: currentColor; flex-shrink: 0; }
-.sentiment-positive { color: #16a34a; }   /* green  — Positive / Inquisitive */
-.sentiment-neutral  { color: #64748b; }   /* slate  — Neutral / Transactional */
-.sentiment-urgent   { color: #e11d48; }   /* rose   — Urgent / Frustrated */
+/* Sentiment: colour-coded pill/box (mirrors the old intent style). */
+.sentiment { padding: 4px 10px; border-radius: 6px; font-size: 12px; font-weight: 600; display: inline-block; white-space: nowrap; }
+.sentiment-positive { background-color: #f0fdf4; color: #16a34a; }   /* green  — Positive / Inquisitive */
+.sentiment-neutral  { background-color: #f1f5f9; color: #475569; }   /* slate  — Neutral / Transactional */
+.sentiment-urgent   { background-color: #fff1f2; color: #e11d48; }   /* rose   — Urgent / Frustrated */
 .dot { width: 8px; height: 8px; border-radius: 50%; border: 2px solid; background: transparent;}
 .dot.green { border-color: #10b981; }
 .dot.blue { border-color: #3b82f6; }
