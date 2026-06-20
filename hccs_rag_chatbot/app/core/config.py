@@ -65,6 +65,25 @@ class Settings(BaseSettings):
     # RRF dampening constant (Cormack et al., 2009); 60 is the canonical value.
     RAG_FUSION_RRF_K: int = 60
 
+    # --- Document ingestion (app/services/ingestion) ------------------------
+    # Tiered extraction: try the cheap native text layer first; if a PDF looks
+    # scanned (too few characters per page) fall back to OCR; optionally run an
+    # LLM cleanup pass on OCR output. All of this is INGESTION-time, never on
+    # the query path.
+    # OCR engine: "tesseract" (local, free, offline) or "gemini" (vision model,
+    # better on tables/layout, needs the API + network).
+    INGEST_OCR_BACKEND: str = "tesseract"
+    # Below this many characters per page, a PDF's text layer is treated as
+    # scanned/empty and OCR kicks in.
+    INGEST_TEXT_MIN_CHARS_PER_PAGE: int = 100
+    # After OCR, still below this many chars/page => flag the doc for human
+    # review (genuinely unreadable source).
+    INGEST_OCR_MIN_CHARS_PER_PAGE: int = 50
+    # Render resolution for OCR; higher = more accurate but slower/heavier.
+    INGEST_OCR_DPI: int = 300
+    # Run an LLM cleanup pass over OCR output (reformat tables, fix OCR noise).
+    INGEST_LLM_CLEANUP: bool = False
+
     # --- Rate limiting ------------------------------------------------------
     RATE_LIMIT_MAX_REQUESTS: int = 20
     RATE_LIMIT_WINDOW_SECONDS: int = 60

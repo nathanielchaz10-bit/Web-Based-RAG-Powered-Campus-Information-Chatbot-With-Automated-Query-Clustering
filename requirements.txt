@@ -41,6 +41,19 @@ tenacity==9.1.4
 pypdf==6.10.2
 docx2txt==0.9
 
+# --- Document ingestion pipeline (app/services/ingestion) ---
+# PyMuPDF: PDF text extraction + page rendering for OCR (no poppler needed).
+# pytesseract + Pillow: local OCR for scanned PDFs. NOTE: pytesseract also
+# requires the Tesseract system binary, which pip cannot install:
+#   Debian/Ubuntu: apt-get install tesseract-ocr
+#   macOS:         brew install tesseract
+#   Windows:       https://github.com/UB-Mannheim/tesseract/wiki
+# The Gemini-vision OCR backend reuses langchain-google-genai (already above)
+# and needs no extra package.
+PyMuPDF==1.24.10
+pytesseract==0.3.13
+Pillow==10.4.0
+
 # --- Local NLP enrichment (sentiment/intent on each query) ---
 # Pure-Python, rule-based, no model download. Optional at runtime: the chat
 # router degrades to neutral sentiment if this is absent, but install it to
