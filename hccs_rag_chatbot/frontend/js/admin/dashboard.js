@@ -120,7 +120,7 @@ async function loadQueryVolumeChart() {
     try {
         const data = await apiGet("/dashboard/query-volume");
 
-        const ctx = document.getElementById("query-volume-chart");
+        const ctx = document.getElementById("queryChart");
         new Chart(ctx, {
             type: "bar",
             data: {
@@ -146,7 +146,7 @@ async function loadQueryVolumeChart() {
             }
         });
     } catch (err) {
-        showError("query-volume-chart", "Could not load chart.");
+        showError("queryChart", "Could not load chart.");
     }
 }
 
