@@ -15,8 +15,9 @@ document.addEventListener("DOMContentLoaded", async () => {
         loadRecentInquiries()
     ]);
 
-    // 4. Wire the header search to filter the recent-inquiries table
+    // 4. Wire the header search + "View All Activity" toggle
     wireDashboardSearch();
+    wireViewAllActivity();
 
 });
 
@@ -185,17 +186,42 @@ async function loadSystemHealth() {
 
 // Recent inquiries are cached so the header search can filter them client-side
 // (by question text, student email, intent or sentiment) without re-fetching.
+// "View All Activity" swaps the capped recent set for the full history, which
+// also makes the search meaningful (it searches whatever is currently loaded).
 let recentInquiries = [];
 let inquirySearchTerm = "";
+let showingAllActivity = false;
 
 async function loadRecentInquiries() {
     try {
-        const data = await apiGet("/dashboard/recent-inquiries");
+        const limit = showingAllActivity ? 0 : 10; // limit<=0 -> full history
+        const data = await apiGet(`/dashboard/recent-inquiries?limit=${limit}`);
         recentInquiries = Array.isArray(data) ? data : [];
         renderInquiries();
     } catch (err) {
         showError("inquiries-tbody", "Could not load recent inquiries.");
     }
+}
+
+function wireViewAllActivity() {
+    const link = document.getElementById("view-all-activity");
+    if (!link) return;
+
+    link.addEventListener("click", async (e) => {
+        e.preventDefault();
+        showingAllActivity = !showingAllActivity;
+
+        link.textContent = showingAllActivity ? "SHOW RECENT ONLY" : "VIEW ALL ACTIVITY";
+        const heading = document.getElementById("inquiries-heading");
+        if (heading) {
+            heading.textContent = showingAllActivity ? "ALL STUDENT INQUIRIES" : "RECENT STUDENT INQUIRIES";
+        }
+        // Cap the height + scroll only when the full list is shown, so a long
+        // history doesn't push the rest of the page down.
+        document.querySelector(".table-responsive")?.classList.toggle("expanded", showingAllActivity);
+
+        await loadRecentInquiries();
+    });
 }
 
 function renderInquiries() {

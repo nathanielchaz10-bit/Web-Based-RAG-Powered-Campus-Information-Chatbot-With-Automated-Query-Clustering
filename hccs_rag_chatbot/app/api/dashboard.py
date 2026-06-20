@@ -118,13 +118,21 @@ def system_health(db: Session = Depends(get_db), _: UserAccount = Depends(requir
 
 
 @router.get("/recent-inquiries")
-def recent_inquiries(db: Session = Depends(get_db), _: UserAccount = Depends(require_admin)):
-    rows = (
-        db.query(QueryLog)
-        .order_by(QueryLog.query_id.desc())
-        .limit(10)
-        .all()
-    )
+def recent_inquiries(
+    limit: int = 10,
+    db: Session = Depends(get_db),
+    _: UserAccount = Depends(require_admin),
+):
+    """Most recent student inquiries, newest first.
+
+    `limit` caps how many rows are returned (default 10, what the dashboard
+    shows at rest). The "View All Activity" toggle passes limit<=0 to fetch the
+    full history.
+    """
+    query = db.query(QueryLog).order_by(QueryLog.query_id.desc())
+    if limit and limit > 0:
+        query = query.limit(limit)
+    rows = query.all()
     out = []
     for q in rows:
         email = "—"
