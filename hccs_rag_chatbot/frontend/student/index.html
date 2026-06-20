@@ -137,6 +137,14 @@
                             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="3" width="20" height="14" rx="2" ry="2"></rect><line x1="8" y1="21" x2="16" y2="21"></line><line x1="12" y1="17" x2="12" y2="21"></line></svg>
                             Appearance
                         </li>
+                        <li data-tab="settings-privacy-tab">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path></svg>
+                            Privacy & Data
+                        </li>
+                        <li data-tab="settings-help-tab">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"></path><line x1="12" y1="17" x2="12.01" y2="17"></line></svg>
+                            Help & About
+                        </li>
                     </ul>
                 </div>
 
@@ -186,6 +194,43 @@
                                 <option value="Roboto">Roboto</option>
                                 <option value="Open Sans">Open Sans</option>
                             </select>
+                        </div>
+                    </div>
+
+                    <div id="settings-privacy-tab" class="settings-tab-pane hidden">
+                        <h2>Privacy & Data</h2>
+
+                        <div class="setting-group">
+                            <label>Export my chats</label>
+                            <p class="setting-description">Download every conversation you've had with the assistant as a single file.</p>
+                            <button class="settings-action-btn" id="export-chats-btn">Export my chats</button>
+                        </div>
+
+                        <div class="setting-group">
+                            <label>Clear all chat history</label>
+                            <p class="setting-description">Permanently deletes every conversation in your account. This cannot be undone.</p>
+                            <button class="settings-action-btn danger" id="clear-history-btn">Clear all chat history</button>
+                        </div>
+                    </div>
+
+                    <div id="settings-help-tab" class="settings-tab-pane hidden">
+                        <h2>Help & About</h2>
+
+                        <div class="setting-group">
+                            <label>Need something the assistant can't answer?</label>
+                            <button class="settings-link-btn" id="help-handbook-btn">
+                                Find the Student Handbook
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="5" y1="12" x2="19" y2="12"></line><polyline points="12 5 19 12 12 19"></polyline></svg>
+                            </button>
+                            <button class="settings-link-btn" id="help-registrar-btn">
+                                Contact the registrar's office
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="5" y1="12" x2="19" y2="12"></line><polyline points="12 5 19 12 12 19"></polyline></svg>
+                            </button>
+                        </div>
+
+                        <div class="setting-group">
+                            <label>About</label>
+                            <p class="setting-description">HCCS Campus Assistant — v1.0</p>
                         </div>
                     </div>
 
