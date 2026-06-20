@@ -43,6 +43,11 @@ document.addEventListener("DOMContentLoaded", async () => {
 
 let topicChart = null;
 
+// Raw-queries modal state. Loaded once per "View Raw Queries" click and kept
+// around so the All / Low Confidence toggle can re-filter without re-fetching.
+let currentClusterQueries = [];
+let currentQueryFilter = "all";
+
 async function loadClusterOverview() {
     try {
         const data = await apiGet("/clusters/overview");
@@ -248,6 +253,56 @@ function escapeHtml(text) {
     return div.innerHTML;
 }
 
+async function loadClusterQueries(clusterId) {
+    const body = document.getElementById("queries-modal-body");
+    if (body) body.innerHTML = `<p class="placeholder-note">Loading queries…</p>`;
+    currentClusterQueries = [];
+
+    try {
+        const data = await apiGet(`/clusters/${clusterId}/queries`);
+        currentClusterQueries = Array.isArray(data?.queries) ? data.queries : [];
+    } catch (err) {
+        console.error("Could not load cluster queries:", err);
+        if (body) body.innerHTML = `<p class="placeholder-note">Could not load queries. Please try again.</p>`;
+        return;
+    }
+
+    renderClusterQueries();
+}
+
+function renderClusterQueries() {
+    const body = document.getElementById("queries-modal-body");
+    if (!body) return;
+
+    const rows = currentQueryFilter === "low"
+        ? currentClusterQueries.filter(q => q.low_confidence)
+        : currentClusterQueries;
+
+    if (!rows.length) {
+        const msg = currentQueryFilter === "low"
+            ? "No low-confidence queries in this cluster."
+            : "No queries found for this cluster.";
+        body.innerHTML = `<p class="placeholder-note">${msg}</p>`;
+        return;
+    }
+
+    body.innerHTML = rows.map(q => {
+        const conf = typeof q.confidence === "number" ? `${Math.round(q.confidence * 100)}%` : "—";
+        const confClass = q.low_confidence ? "qrow-conf low" : "qrow-conf";
+        const intent = q.detected_intent ? `<span class="qrow-tag">${escapeHtml(q.detected_intent)}</span>` : "";
+        const sentiment = q.sentiment ? `<span class="qrow-tag">${escapeHtml(q.sentiment)}</span>` : "";
+        return `
+            <div class="qrow">
+                <p class="qrow-text">${escapeHtml(q.query_text)}</p>
+                <div class="qrow-meta">
+                    ${intent}
+                    ${sentiment}
+                    <span class="${confClass}">Confidence: ${conf}</span>
+                </div>
+            </div>`;
+    }).join("");
+}
+
 function wireModalLogic() {
     try {
         const sentimentModal = document.getElementById('sentiment-modal');
@@ -262,23 +317,32 @@ function wireModalLogic() {
 
         // Cluster cards are rendered dynamically, so this listens on the
         // document instead of attaching to buttons that don't exist yet.
-        document.body.addEventListener('click', (e) => {
+        document.body.addEventListener('click', async (e) => {
             const btn = e.target.closest('.view-raw-btn');
-            if (btn && queriesModal) {
-                if (queriesModalTitle) {
-                    queriesModalTitle.textContent = `Raw Queries: ${btn.dataset.clusterLabel || ''}`;
-                }
-                queriesModal.classList.remove('hidden');
+            if (!btn || !queriesModal) return;
+
+            if (queriesModalTitle) {
+                queriesModalTitle.textContent = `Raw Queries: ${btn.dataset.clusterLabel || ''}`;
             }
+
+            // Always reopen on the "All Queries" view.
+            currentQueryFilter = "all";
+            document.querySelectorAll('.toggle-btn').forEach(b => {
+                b.classList.toggle('active', b.dataset.filter === 'all');
+            });
+
+            queriesModal.classList.remove('hidden');
+            await loadClusterQueries(btn.dataset.clusterId);
         });
 
         const toggleBtns = document.querySelectorAll('.toggle-btn');
         toggleBtns.forEach(btn => {
             btn.addEventListener('click', (e) => {
+                const target = e.currentTarget;
                 toggleBtns.forEach(b => b.classList.remove('active'));
-                e.target.classList.add('active');
-                // Re-filtering real query results (once /clusters/{id}/queries
-                // is wired up) goes here.
+                target.classList.add('active');
+                currentQueryFilter = target.dataset.filter || "all";
+                renderClusterQueries();
             });
         });
 

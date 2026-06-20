@@ -969,6 +969,15 @@ input[type="range"]::-webkit-slider-thumb {
 .btn-cancel { width: auto; padding: 10px 20px; }
 .placeholder-note { font-size: 13px; color: #64748b; }
 
+/* --- Raw Queries modal: per-query rows --- */
+.qrow { background: #fff; border: 1px solid #e2e8f0; border-radius: 8px; padding: 12px 14px; margin-bottom: 10px; }
+.qrow:last-child { margin-bottom: 0; }
+.qrow-text { font-size: 14px; color: #1e293b; margin: 0 0 8px; line-height: 1.4; }
+.qrow-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.qrow-tag { font-size: 11px; font-weight: 600; color: #475569; background: #f1f5f9; border-radius: 4px; padding: 3px 8px; text-transform: capitalize; }
+.qrow-conf { font-size: 11px; font-weight: 600; color: #0284c7; background: #e0f2fe; border-radius: 4px; padding: 3px 8px; margin-left: auto; }
+.qrow-conf.low { color: #b91c1c; background: #fee2e2; }
+
 /* --- Toast notification --- */
 .toast {
     position: fixed;

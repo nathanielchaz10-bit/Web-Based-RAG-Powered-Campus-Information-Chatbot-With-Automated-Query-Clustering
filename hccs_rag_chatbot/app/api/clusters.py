@@ -1,6 +1,7 @@
 # app/api/clusters.py
 from datetime import datetime, timedelta
 
+import numpy as np
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
@@ -14,8 +15,14 @@ from app.models.user_account import UserAccount
 
 # FIXED IMPORTS: Points straight to your active orchestrator script
 from app.services.clustering.pipeline import run_clustering_pipeline
+from app.services.clustering.vectorizer import deserialize_vector
 
 router = APIRouter(prefix="/clusters", tags=["Clusters"])
+
+# A query whose cosine similarity to its cluster centroid is below this is
+# surfaced as "low confidence" in the Raw Queries modal — it sits near the
+# edge of the cluster and is the most likely candidate for a mis-grouping.
+LOW_CONFIDENCE_THRESHOLD = 0.75
 
 
 # Map the sentiment labels produced by app/services/nlp/sentiment.py (plus the
@@ -179,4 +186,77 @@ def list_clusters(
         "total_queries": latest_run.total_queries,
         "num_clusters": latest_run.num_clusters_found,
         "clusters": payload,
+    }
+
+
+def _cosine_similarity(a, b):
+    """Cosine similarity of two vectors, or None if either has zero magnitude."""
+    av = np.asarray(a, dtype=float)
+    bv = np.asarray(b, dtype=float)
+    na = np.linalg.norm(av)
+    nb = np.linalg.norm(bv)
+    if na == 0 or nb == 0:
+        return None
+    return float(np.dot(av, bv) / (na * nb))
+
+
+@router.get("/{cluster_id}/queries")
+def cluster_queries(
+    cluster_id: int,
+    db: Session = Depends(get_db),
+    user: UserAccount = Depends(get_current_user),
+):
+    """Raw queries assigned to a cluster, newest first.
+
+    Backs the "View Raw Queries" modal on the Query Clusters page. Each query
+    carries a `confidence` (cosine similarity of its stored embedding to the
+    cluster centroid, 0-1) so the modal's "Low Confidence Only" toggle has
+    something real to filter on. `confidence` is null for queries whose
+    embedding wasn't cached (e.g. clustered before query_vector was stored).
+    """
+    cluster = db.query(Cluster).filter_by(cluster_id=cluster_id).first()
+    if cluster is None:
+        raise HTTPException(status_code=404, detail="Cluster not found.")
+
+    centroid = None
+    if cluster.centroid_vector:
+        try:
+            centroid = deserialize_vector(cluster.centroid_vector)
+        except Exception:
+            centroid = None
+
+    rows = (
+        db.query(QueryLog)
+        .filter(QueryLog.cluster_id == cluster_id)
+        .order_by(QueryLog.timestamp.desc())
+        .all()
+    )
+
+    queries = []
+    for q in rows:
+        confidence = None
+        if centroid is not None and q.query_vector:
+            try:
+                sim = _cosine_similarity(deserialize_vector(q.query_vector), centroid)
+                if sim is not None:
+                    confidence = round(sim, 4)
+            except Exception:
+                confidence = None
+
+        queries.append({
+            "query_id": q.query_id,
+            "query_text": q.query_text,
+            "timestamp": q.timestamp.isoformat() if q.timestamp else None,
+            "sentiment": q.sentiment,
+            "detected_intent": q.detected_intent,
+            "confidence": confidence,
+            "low_confidence": confidence is not None and confidence < LOW_CONFIDENCE_THRESHOLD,
+        })
+
+    return {
+        "cluster_id": cluster.cluster_id,
+        "cluster_label": cluster.cluster_label,
+        "query_count": len(queries),
+        "low_confidence_threshold": LOW_CONFIDENCE_THRESHOLD,
+        "queries": queries,
     }
