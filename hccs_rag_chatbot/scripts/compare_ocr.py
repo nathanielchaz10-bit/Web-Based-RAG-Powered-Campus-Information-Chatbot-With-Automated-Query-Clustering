@@ -17,6 +17,7 @@ Notes:
 import argparse
 import os
 import sys
+import tempfile
 import time
 
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -39,7 +40,11 @@ def main() -> None:
         default="text,tesseract,gemini",
         help="Comma list of: text, tesseract, gemini.",
     )
-    ap.add_argument("--outdir", default="/tmp/ocr_compare", help="Where to write outputs.")
+    ap.add_argument(
+        "--outdir",
+        default=os.path.join(tempfile.gettempdir(), "ocr_compare"),
+        help="Where to write outputs (defaults to the OS temp dir).",
+    )
     ap.add_argument("--preview", type=int, default=600, help="Chars to preview per engine.")
     args = ap.parse_args()
 
