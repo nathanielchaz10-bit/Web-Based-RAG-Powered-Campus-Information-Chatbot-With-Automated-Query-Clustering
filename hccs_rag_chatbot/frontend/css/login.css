@@ -2,108 +2,207 @@
     margin: 0;
     padding: 0;
     box-sizing: border-box;
-    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    font-family: 'Inter', sans-serif;
+}
+
+html, body {
+    min-height: 100vh;
 }
 
 body {
-    background: radial-gradient(circle at center, #1a365d 0%, #0a192f 100%);
+    overflow-y: auto;
+}
+
+/* =========================================
+   FULL-BLEED BACKGROUND
+========================================= */
+.login-page {
+    position: relative;
     min-height: 100vh;
     display: flex;
-    justify-content: center;
     align-items: center;
-    color: #ffffff;
+    justify-content: center;
+    padding: 48px 24px;
 }
 
-.login-container {
-    padding: 20px;
-    width: 100%;
-    max-width: 540px;
+.login-page::before {
+    content: "";
+    position: fixed;
+    inset: -20px;
+    background-image: url('/frontend/asset/hccs_picture.jpg');
+    background-size: cover;
+    background-position: center;
+    filter: blur(8px); /* Increased blur so the card pops */
+    z-index: -2;
 }
 
+.login-page::after {
+    content: "";
+    position: fixed;
+    inset: 0;
+    /* Made the overlay significantly dimmer */
+    background: rgba(10, 15, 25, 0.70);
+    z-index: -1;
+}
+
+/* =========================================
+   CENTERED CARD
+========================================= */
 .login-card {
-    background-color: #2d2d2d;
-    border-radius: 16px;
-    padding: 40px 48px;
-    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+    position: relative;
+    width: 100%;
+    max-width: 400px;
+    background-color: #ffffff;
+    border-radius: 14px;
+    box-shadow: 0 24px 60px rgba(0, 0, 0, 0.4);
+    padding: 48px 36px 36px;
     text-align: center;
 }
 
-.icon-container {
-    background-color: #e8f0fe;
-    width: 64px;
-    height: 64px;
-    border-radius: 16px;
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    margin: 0 auto 24px auto;
+.login-seal {
+    width: 96px;
+    height: 96px;
+    object-fit: contain;
+    margin: 0 auto 28px;
+    display: block;
 }
 
-.app-title {
-    font-size: 22px;
-    font-weight: 600;
-    margin-bottom: 4px;
-    color: #ffffff;
+.login-school-name {
+    font-size: 18px;
+    font-weight: 700;
+    color: #7f1d1d; /* Retained the Maroon text color */
+    letter-spacing: 0.4px;
+    line-height: 1.4;
+    margin-bottom: 8px;
 }
 
-.app-subtitle {
-    font-size: 14px;
-    font-weight: 400;
-    color: #a0aabf;
-    margin-bottom: 24px;
-}
-
-.security-badge {
-    display: inline-flex;
-    align-items: center;
-    gap: 6px;
-    background-color: #e8f0fe;
-    color: #0b57d0;
-    padding: 6px 12px;
-    border-radius: 20px;
-    font-size: 12px;
+.login-campus-line {
+    font-size: 13px;
     font-weight: 500;
-    margin-bottom: 24px;
+    color: #475569;
+    margin-bottom: 6px;
 }
 
+.login-app-name {
+    font-size: 12px;
+    font-weight: 600;
+    color: #94a3b8;
+    text-transform: uppercase;
+    letter-spacing: 0.8px;
+    margin-bottom: 36px;
+}
+
+/* --- Error message --- */
+.login-error {
+    background-color: #fef2f2;
+    border: 1px solid #fecaca;
+    color: #dc2626;
+    border-radius: 8px;
+    padding: 10px 14px;
+    font-size: 13px;
+    margin-bottom: 16px;
+    text-align: left;
+}
+
+/* --- Primary Google sign-in button --- */
 .google-btn {
     display: flex;
     align-items: center;
     justify-content: center;
     gap: 12px;
     width: 100%;
-    background-color: transparent;
-    border: 1px solid #5f6368;
-    color: #ffffff;
-    padding: 12px 24px;
-    border-radius: 8px;
+    padding: 14px;
+    background-color: #254a85; /* Changed to Official HCCS Blue */
+    border: none;
+    border-radius: 10px;
     font-size: 15px;
-    font-weight: 500;
+    font-weight: 600;
+    color: #ffffff;
     cursor: pointer;
-    transition: background-color 0.2s, border-color 0.2s;
-    margin-bottom: 24px;
+    box-shadow: 0 4px 12px rgba(37, 74, 133, 0.3); /* Slight blue shadow */
+    transition: background-color 0.2s ease, transform 0.15s ease;
+}
+
+.google-btn svg {
+    background: #fff;
+    border-radius: 50%;
+    padding: 2px;
 }
 
 .google-btn:hover {
-    background-color: rgba(255, 255, 255, 0.05);
-    border-color: #ffffff;
+    background-color: #1a365d; /* Darker HCCS Blue on hover */
 }
 
-.restriction-text {
-    font-size: 13px;
-    color: #e8eaed;
-    line-height: 1.5;
-    margin-bottom: 24px;
+.google-btn:active {
+    transform: scale(0.99);
 }
 
-.divider {
-    border: none;
-    border-top: 1px solid #4a4a4a;
-    margin-bottom: 24px;
+/* --- Restriction notice --- */
+.restriction-notice {
+    margin-top: 16px;
+    font-size: 12px;
+    color: #94a3b8;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
 }
 
-.footer-text {
+/* --- Dev-only bypass --- */
+.dev-only-divider {
+    border-top: 1px dashed #e2e8f0;
+    margin: 24px 0 16px;
+    padding-top: 16px;
+}
+
+.dev-only-label {
     font-size: 11px;
-    color: #9aa0a6;
-    line-height: 1.5;
+    font-weight: 600;
+    color: #94a3b8;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    text-align: center;
+    margin-bottom: 12px;
+}
+
+.dev-only-group {
+    display: flex;
+    gap: 10px;
+}
+
+.dev-only-btn {
+    flex: 1;
+    padding: 11px;
+    background-color: #ffffff;
+    border: 1px solid #e2e8f0;
+    border-radius: 8px;
+    font-size: 13px;
+    font-weight: 500;
+    color: #334155;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.dev-only-btn:hover {
+    border-color: #94a3b8;
+    background-color: #f8fafc;
+}
+
+/* =========================================
+   RESPONSIVE
+========================================= */
+@media (max-width: 480px) {
+    .login-card {
+        padding: 32px 24px 28px;
+    }
+    .login-school-name {
+        font-size: 17px;
+    }
+    .dev-only-group {
+        flex-direction: column;
+    }
+}
+
+.hidden {
+    display: none !important;
 }
