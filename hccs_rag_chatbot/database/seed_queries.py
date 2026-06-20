@@ -4,7 +4,7 @@ Inserts a batch of realistic, topic-grouped questions directly into QueryLog so
 the clustering pipeline has enough dense, semantically-similar groups to work
 with.
 
-Seeds ~60 questions across 8 topics (5-8 close paraphrases each) plus a short
+Seeds 150 questions across 14 topics (8-12 close paraphrases each) plus a short
 tail of unrelated one-off questions, to mimic a realistic clustering run.
 
 Clustering needs at least CLUSTERING_MIN_QUERIES valid queries to run at all,
@@ -59,6 +59,9 @@ SAMPLE_QUERIES = {
         "Do I lose my scholarship if my grades drop?",
         "Are there scholarships available for incoming freshmen?",
         "What documents do I submit for a scholarship application?",
+        "Is there a discount or scholarship for siblings studying here?",
+        "When is the deadline to apply for a scholarship?",
+        "Who do I contact to follow up on my scholarship application?",
     ],
     "Enrollment": [
         "How do I enroll for the next semester?",
@@ -69,6 +72,10 @@ SAMPLE_QUERIES = {
         "How do I enroll as a transferee from another school?",
         "Is online enrollment available this year?",
         "What is the deadline for enrollment this semester?",
+        "How much is the reservation fee during enrollment?",
+        "Do incoming students need to take an entrance exam?",
+        "Where do I submit my enrollment requirements?",
+        "Can my parent enroll me if I can't come to school?",
     ],
     "Payments": [
         "How much is the tuition fee this year?",
@@ -79,6 +86,10 @@ SAMPLE_QUERIES = {
         "Can I pay tuition through GCash or bank transfer?",
         "How do I get an official receipt for my payment?",
         "What happens if I miss the tuition payment deadline?",
+        "How much is the downpayment for this school year?",
+        "Is there a penalty for paying tuition late?",
+        "Can I take the exams if I still have a balance?",
+        "What are the available payment schemes for tuition?",
     ],
     "Uniform Policy": [
         "What is the school's uniform policy?",
@@ -88,6 +99,9 @@ SAMPLE_QUERIES = {
         "What kind of shoes are allowed under the uniform policy?",
         "Is there a haircut rule for male students?",
         "What is the proper uniform for wash days?",
+        "Where can I buy the official school uniform?",
+        "Are accessories or colored hair allowed in school?",
+        "Do we need to wear the complete uniform during exams?",
     ],
     "Campus Directory": [
         "Where is the registrar's office located?",
@@ -97,15 +111,22 @@ SAMPLE_QUERIES = {
         "Which building is the faculty room in?",
         "Where is the library located?",
         "What is the contact number of the registrar's office?",
+        "What time does the registrar's office open?",
+        "Where is the admissions office located?",
+        "How do I contact the principal's office?",
     ],
     "Grades / Records": [
-        "How do I request a copy of my grades?",
         "What is the passing grade at HCCS?",
         "How is the grading system computed?",
-        "How can I get my Form 138?",
         "What should I do if I have an incomplete grade?",
-        "How do I request my transcript of records?",
         "When will the grades for this semester be released?",
+        "How do I have my grade rechecked if it looks wrong?",
+        "How is the general weighted average calculated?",
+        "Where can I view my grades for this quarter?",
+        "What grade do I need to pass a subject?",
+        "Who do I approach about a failing grade?",
+        "Are grades released per quarter or per semester?",
+        "How do I compute my average from my grades?",
     ],
     "Attendance": [
         "What is the school's attendance policy?",
@@ -114,6 +135,9 @@ SAMPLE_QUERIES = {
         "What is the policy on tardiness?",
         "What happens if I miss an exam due to an absence?",
         "How do I file an excuse for an absence?",
+        "Will I be marked absent if I come in late?",
+        "How many times can I be late before it counts as an absence?",
+        "Do I need a medical certificate after being sick for several days?",
     ],
     "Class Schedule": [
         "How do I check my class schedule?",
@@ -121,12 +145,90 @@ SAMPLE_QUERIES = {
         "Where do I see my room assignments?",
         "What time do classes start in the morning?",
         "How do I add or drop a subject from my schedule?",
+        "Where can I find my section's class schedule?",
+        "What time is dismissal for senior high students?",
+        "Can I request a different section after enrollment?",
+        "How do I know which room my class is in?",
+    ],
+    "Portal / LMS": [
+        "How do I log in to the student portal?",
+        "I forgot my LMS password, how do I reset it?",
+        "The student portal is not loading, what should I do?",
+        "Where do I access my online modules?",
+        "How do I get my student portal account?",
+        "Why can't I log in to my school account?",
+        "How do I change my password on the LMS?",
+        "Who do I contact for student portal problems?",
+        "Is there an app for the school's learning management system?",
+        "My account is locked, how do I get back in?",
+        "Where do I submit my activities on the LMS?",
+    ],
+    "Honors / Awards": [
+        "What is the GWA required to graduate with honors?",
+        "How do I qualify for the honor roll?",
+        "What is the average needed for With High Honors?",
+        "Is PE included in computing honors?",
+        "Does a grade below 90 disqualify me from honors?",
+        "What awards are given during recognition day?",
+        "Are honors given per quarter or for the whole year?",
+        "What are the requirements for the academic excellence award?",
+        "Is there a leadership award for student officers?",
+        "How is the honor ranking decided among students?",
+        "What is the cutoff average to be an honor student?",
+    ],
+    "Events / Suspensions": [
+        "What time does the flag ceremony start?",
+        "Is there a morning mass tomorrow?",
+        "Are classes suspended because of the typhoon?",
+        "When is the foundation day celebration?",
+        "When do classes resume after the semestral break?",
+        "Is there class on the holiday next week?",
+        "When is the intramurals this school year?",
+        "Will classes be cancelled due to the bad weather?",
+        "Is today's class suspended due to the storm?",
+        "When is the Christmas break this year?",
+        "When is the parent-teacher conference scheduled?",
+    ],
+    "Library / Facilities": [
+        "What are the library's opening hours?",
+        "Can I borrow books from the library overnight?",
+        "Is there free WiFi for students on campus?",
+        "How do I connect to the school WiFi?",
+        "Are there study areas students can use?",
+        "How many books can I borrow at once?",
+        "What is the fine for returning a book late?",
+        "Does the library have computers students can use?",
+        "Until what time is the library open on weekdays?",
+        "Can alumni still use the school library?",
+    ],
+    "Documents / Certificates": [
+        "How do I request my transcript of records?",
+        "How long does it take to get a good moral certificate?",
+        "How do I get a copy of my Form 137?",
+        "How much does a certificate of enrollment cost?",
+        "Can I request my school documents online?",
+        "How do I get a certified true copy of my grades?",
+        "What do I need to claim my Form 138 report card?",
+        "How many days before I can claim my transcript?",
+        "Can someone else claim my documents on my behalf?",
+    ],
+    "Guidance / Student Welfare": [
+        "How do I set an appointment with the guidance counselor?",
+        "Who do I talk to if I am being bullied?",
+        "Is there counseling available for stressed students?",
+        "What is the school's anti-bullying policy?",
+        "How do I report a bullying incident?",
+        "Can I talk to a counselor about personal problems?",
+        "Where do I get a guidance clearance signed?",
+        "How do I file a complaint against a classmate?",
     ],
     "_noise": [
         "Is there a basketball varsity team I can try out for?",
         "Does the school have a lost and found section?",
         "Can I bring my own laptop to class?",
         "What time does the canteen close?",
+        "Is there a school choir I can join?",
+        "Are cellphones allowed during class hours?",
     ],
 }
 
@@ -151,9 +253,9 @@ def seed():
 
             intent = classify_intent(text) if classify_intent else None
             sentiment = classify_sentiment(text) if classify_sentiment else None
-            # Spread timestamps over the last ~6 days so the query-volume chart
+            # Spread timestamps over the last ~14 days so the query-volume chart
             # and week-over-week growth metric have something to show.
-            ts = now - timedelta(days=(total - i) % 6, minutes=i)
+            ts = now - timedelta(days=(total - i) % 14, minutes=i)
 
             db.add(QueryLog(
                 query_text=text,
