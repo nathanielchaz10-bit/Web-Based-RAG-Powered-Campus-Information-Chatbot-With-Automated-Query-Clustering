@@ -28,6 +28,7 @@ sentiment logic and want existing rows re-classified — it clears query_logs
 """
 
 import os
+import random
 import sys
 from datetime import datetime, timedelta
 
@@ -267,8 +268,23 @@ def seed(reset: bool = False):
         existing = {t for (t,) in db.query(QueryLog.query_text).all()}
 
         flat = [(topic, q) for topic, qs in SAMPLE_QUERIES.items() for q in qs]
-        total = len(flat)
         now = datetime.utcnow()
+
+        # Give the seeded data a realistic daily shape (weekdays busier than
+        # weekends, this week a bit busier than last) so the dashboard's volume
+        # chart and week-over-week metric look meaningful rather than flat.
+        # Seeded RNG so a re-seed reproduces the same distribution.
+        random.seed(42)
+        today = now.date()
+        day_offsets = list(range(14))  # 0 = today ... 13 = ~two weeks ago
+        dow_weight = {0: 1.3, 1: 1.5, 2: 1.5, 3: 1.4, 4: 1.1, 5: 0.5, 6: 0.4}  # Mon..Sun
+        offset_weights = []
+        for off in day_offsets:
+            d = today - timedelta(days=off)
+            w = dow_weight[d.weekday()]
+            if off < 7:
+                w *= 1.3  # recency boost -> positive week-over-week growth
+            offset_weights.append(w)
 
         for i, (topic, text) in enumerate(flat):
             if text in existing:
@@ -277,9 +293,13 @@ def seed(reset: bool = False):
 
             intent = classify_intent(text) if classify_intent else None
             sentiment = classify_sentiment(text) if classify_sentiment else None
-            # Spread timestamps over the last ~14 days so the query-volume chart
-            # and week-over-week growth metric have something to show.
-            ts = now - timedelta(days=(total - i) % 14, minutes=i)
+            # Pick a day via the weighted distribution above, at a random
+            # time during school hours.
+            off = random.choices(day_offsets, weights=offset_weights, k=1)[0]
+            d = today - timedelta(days=off)
+            ts = datetime.combine(d, datetime.min.time()) + timedelta(
+                hours=random.randint(7, 19), minutes=random.randint(0, 59)
+            )
 
             db.add(QueryLog(
                 query_text=text,

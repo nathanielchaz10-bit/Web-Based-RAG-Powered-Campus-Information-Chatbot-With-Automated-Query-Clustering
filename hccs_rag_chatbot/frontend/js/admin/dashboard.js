@@ -133,15 +133,35 @@ async function loadQueryVolumeChart() {
                             ? "#1a365d"
                             : "#cbd5e1"
                     ),
-                    borderRadius: 4
+                    borderRadius: 4,
+                    maxBarThickness: 64
                 }]
             },
             options: {
                 responsive: true,
-                plugins: { legend: { display: false } },
+                // Let the chart fill the container's width AND height instead
+                // of locking to a 2:1 ratio (which left it small + left-aligned).
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: { display: false },
+                    tooltip: {
+                        callbacks: {
+                            title: (items) => `${items[0].label} (${items[0].formattedValue} queries)`,
+                            label: () => "Student questions received",
+                        }
+                    }
+                },
                 scales: {
-                    y: { beginAtZero: true },
-                    x: { grid: { display: false } }
+                    y: {
+                        beginAtZero: true,
+                        ticks: { precision: 0 },
+                        title: { display: true, text: "Queries", color: "#94a3b8", font: { size: 11, weight: "600" } },
+                        grid: { color: "#f1f5f9" }
+                    },
+                    x: {
+                        title: { display: true, text: "Day (last 7 days)", color: "#94a3b8", font: { size: 11, weight: "600" } },
+                        grid: { display: false }
+                    }
                 }
             }
         });
