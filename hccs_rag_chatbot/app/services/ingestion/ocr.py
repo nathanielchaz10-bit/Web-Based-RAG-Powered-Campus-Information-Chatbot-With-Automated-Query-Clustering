@@ -30,19 +30,23 @@ _VISION_OCR_PROMPT = (
 
 
 def _render_pdf_pages(path: str, dpi: int) -> Iterator:
-    """Yield each PDF page as a PIL Image, rendered at the given DPI."""
-    import io
+    """Yield each PDF page as a PIL Image, rendered at the given DPI.
 
-    import fitz
-    from PIL import Image
+    Uses pypdfium2 (PDFium): pure prebuilt wheels, no system dependency and no
+    build toolchain required. PDFium's render scale is in units of 72 DPI.
+    """
+    import pypdfium2 as pdfium
 
-    doc = fitz.open(path)
+    pdf = pdfium.PdfDocument(path)
     try:
-        for i in range(doc.page_count):
-            pix = doc[i].get_pixmap(dpi=dpi)
-            yield Image.open(io.BytesIO(pix.tobytes("png")))
+        for i in range(len(pdf)):
+            page = pdf[i]
+            try:
+                yield page.render(scale=dpi / 72).to_pil()
+            finally:
+                page.close()
     finally:
-        doc.close()
+        pdf.close()
 
 
 def tesseract_ocr(path: str, dpi: int | None = None) -> str:

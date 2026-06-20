@@ -49,10 +49,11 @@ def main() -> None:
 
     from app.services.ingestion import extractors
 
-    _, pages = extractors.extract_text_layer(args.pdf)
-    img_pages, total = extractors.count_pdf_image_pages(args.pdf)
+    text_layer, pages = extractors.extract_text_layer(args.pdf)
+    native_cpp = len(text_layer.strip()) / max(pages, 1)
     print(f"\nFile: {args.pdf}")
-    print(f"Pages: {total}  |  pages-with-images: {img_pages}/{total}\n")
+    print(f"Pages: {pages}  |  native text layer: ~{native_cpp:.0f} chars/page "
+          f"({'looks scanned' if native_cpp < 100 else 'has text'})\n")
     print("Results:")
 
     outputs: dict[str, str] = {}

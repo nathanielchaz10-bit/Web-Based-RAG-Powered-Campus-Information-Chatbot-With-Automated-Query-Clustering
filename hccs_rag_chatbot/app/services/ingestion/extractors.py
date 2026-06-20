@@ -25,14 +25,22 @@ def extract_text_layer(path: str) -> tuple[str, int]:
     ext = file_extension(path)
 
     if ext == "pdf":
-        import fitz  # PyMuPDF
+        import pypdfium2 as pdfium
 
-        doc = fitz.open(path)
+        pdf = pdfium.PdfDocument(path)
         try:
-            parts = [doc[i].get_text("text") for i in range(doc.page_count)]
-            return "\n".join(parts), doc.page_count
+            parts = []
+            for i in range(len(pdf)):
+                page = pdf[i]
+                textpage = page.get_textpage()
+                try:
+                    parts.append(textpage.get_text_range() or "")
+                finally:
+                    textpage.close()
+                    page.close()
+            return "\n".join(parts), len(pdf)
         finally:
-            doc.close()
+            pdf.close()
 
     if ext == "docx":
         import docx2txt
@@ -46,17 +54,12 @@ def extract_text_layer(path: str) -> tuple[str, int]:
     raise ValueError(f"Unsupported file type for ingestion: .{ext}")
 
 
-def count_pdf_image_pages(path: str) -> tuple[int, int]:
-    """Return (pages_with_images, total_pages) for a PDF.
+def pdf_page_count(path: str) -> int:
+    """Return the number of pages in a PDF."""
+    import pypdfium2 as pdfium
 
-    A high ratio of image-bearing pages alongside little text is a strong
-    scanned-document signal (used for diagnostics / the comparison script).
-    """
-    import fitz
-
-    doc = fitz.open(path)
+    pdf = pdfium.PdfDocument(path)
     try:
-        img_pages = sum(1 for i in range(doc.page_count) if doc[i].get_images())
-        return img_pages, doc.page_count
+        return len(pdf)
     finally:
-        doc.close()
+        pdf.close()
