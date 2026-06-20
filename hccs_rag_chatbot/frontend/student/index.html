@@ -4,15 +4,21 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>HCCS Campus Assistant</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Open+Sans:wght@400;500;600&family=Roboto:wght@400;500;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="../css/chat.css">
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
 </head>
 <body>
     <div class="app-container">
 
         <aside class="sidebar">
-            <div class="sidebar-header">
-                <h2>HCCS CAMPUS ASSISTANT</h2>
-                <p>Holy Child Catholic School</p>
+
+            <div class="sidebar-header-box">
+                <img src="/frontend/asset/hccs_logo_seal.png" alt="HCCS Logo" class="sidebar-logo">
+                <div class="sidebar-header-text">
+                    <h2>HCCS ASSISTANT</h2>
+                    <p>Holy Child Catholic School</p>
+                </div>
             </div>
 
             <button class="new-chat-btn">
@@ -26,25 +32,31 @@
                     </ul>
             </div>
 
-            <div class="sidebar-footer">
-                <div class="sidebar-footer-profile">
-                    <div class="user-avatar" id="user-avatar">
-                        <span class="avatar-initial">S</span>
-                        <span class="status-dot"></span>
+            <div class="sidebar-footer-container">
+                <div class="sidebar-footer-btn" id="sidebar-footer-btn">
+                    <div class="sidebar-footer-profile">
+                        <div class="user-avatar" id="user-avatar">
+                            <span class="avatar-initial">S</span>
+                            <span class="status-dot"></span>
+                        </div>
+                        <div class="user-info">
+                            <span class="role">Student</span>
+                            <span class="display-name">Loading...</span>
+                        </div>
                     </div>
-                    <div class="user-info">
-                        <span class="role">Student</span>
-                        <span class="display-name">Loading...</span>
+                    <div class="sidebar-footer-icon">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="1"></circle><circle cx="12" cy="5" r="1"></circle><circle cx="12" cy="19" r="1"></circle></svg>
                     </div>
                 </div>
-                <button id="logout-btn" class="logout-btn" title="Log Out">
-                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path><polyline points="16 17 21 12 16 7"></polyline><line x1="21" y1="12" x2="9" y2="12"></line></svg>
-                </button>
             </div>
         </aside>
 
         <main class="main-content">
-            <div class="greeting-text">
+            <header class="chat-header hidden" id="chat-header">
+                <h2 id="chat-title">New Conversation</h2>
+            </header>
+
+            <div class="greeting-text" id="greeting-text">
                 <h1>Your move!</h1>
                 <p>Ask anything about the Holy Child Catholic School campus, policies, or services.</p>
             </div>
@@ -54,7 +66,7 @@
 
             <div class="composer">
                 <div class="input-box">
-                    <button class="icon-btn" title="Attach file (Optional visual only)">
+                    <button class="icon-btn" title="Attach file">
                         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
                     </button>
                     <input type="text" id="chat-input" placeholder="Ask HCCS Assistant..." autocomplete="off">
@@ -65,7 +77,166 @@
                     </div>
                 </div>
             </div>
+
+            <div id="profile-popover" class="profile-popover hidden">
+                <div class="popover-header">
+                    <div class="popover-header-text">
+                        <span class="popover-email" id="popover-email">loading...</span>
+                        <span class="popover-sso-text">Signed in via Google</span>
+                    </div>
+                    <button class="close-popover-btn" id="close-popover" title="Close">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+                    </button>
+                </div>
+                <div class="popover-body">
+                    <div class="popover-avatar-ring">
+                        <div class="popover-avatar-inner">
+                            <span class="popover-avatar-initial" id="popover-avatar-initial">S</span>
+                        </div>
+                    </div>
+
+                    <h3 class="popover-greeting" id="popover-greeting">Hi, Student!</h3>
+
+                    <button class="popover-manage-btn" id="settings-btn">
+                        Theme & Accessibility
+                    </button>
+
+                    <div class="popover-actions">
+                        <button class="popover-action-btn" id="popover-switch-account">
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 21v-2a4 4 0 0 0-4-4H5.5"></path><polyline points="8 22 5.5 19.5 8 17"></polyline><path d="M20 9V7a4 4 0 0 0-4-4H5"></path><circle cx="9" cy="13" r="4"></circle></svg>
+                            Switch account
+                        </button>
+                        <button class="popover-action-btn" id="popover-sign-out">
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path><polyline points="16 17 21 12 16 7"></polyline><line x1="21" y1="12" x2="9" y2="12"></line></svg>
+                            Sign out
+                        </button>
+                    </div>
+
+                    <div class="popover-footer">
+                        <span>© 2026 HCCS IT Dept</span> <span class="separator">•</span> <a href="#">System Status</a>
+                    </div>
+                </div>
+            </div>
+
         </main>
+
+        <div id="settings-overlay" class="settings-overlay hidden">
+            <div class="settings-modal">
+
+                <div class="settings-sidebar">
+                    <div class="settings-search">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#9aa0a6" stroke-width="2"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+                        <input type="text" placeholder="Search settings">
+                    </div>
+                    <ul class="settings-nav">
+                        <li class="active" data-tab="settings-profile-tab">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg>
+                            Profile
+                        </li>
+                        <li data-tab="settings-appearance-tab">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="3" width="20" height="14" rx="2" ry="2"></rect><line x1="8" y1="21" x2="16" y2="21"></line><line x1="12" y1="17" x2="12" y2="21"></line></svg>
+                            Appearance
+                        </li>
+                        <li data-tab="settings-privacy-tab">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path></svg>
+                            Privacy & Data
+                        </li>
+                        <li data-tab="settings-help-tab">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"></path><line x1="12" y1="17" x2="12.01" y2="17"></line></svg>
+                            Help & About
+                        </li>
+                    </ul>
+                </div>
+
+                <div class="settings-content">
+                    <button class="settings-close-btn" id="close-settings" title="Close Settings">
+                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+                    </button>
+
+                    <div id="settings-profile-tab" class="settings-tab-pane active">
+                        <h2>Profile</h2>
+
+                        <div class="setting-group">
+                            <label>Avatar</label>
+                            <div class="setting-avatar-circle">
+                                <span id="settings-modal-initial">S</span>
+                            </div>
+                        </div>
+
+                        <div class="setting-group">
+                            <label>Full name</label>
+                            <input type="text" id="settings-fullname" value="Loading..." readonly class="readonly-input">
+                        </div>
+
+                        <div class="setting-group">
+                            <label>What should HCCS Assistant call you?</label>
+                            <input type="text" id="settings-nickname" value="Student">
+                        </div>
+                    </div>
+
+                    <div id="settings-appearance-tab" class="settings-tab-pane hidden">
+                        <h2>Appearance</h2>
+
+                        <div class="setting-group row-group">
+                            <label>Theme</label>
+                            <div class="theme-toggles">
+                                <button class="theme-btn active" id="theme-btn-system" title="System Sync"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="3" width="20" height="14" rx="2" ry="2"></rect><line x1="8" y1="21" x2="16" y2="21"></line><line x1="12" y1="17" x2="12" y2="21"></line></svg></button>
+                                <button class="theme-btn" id="theme-btn-light" title="Light Mode"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="5"></circle><line x1="12" y1="1" x2="12" y2="3"></line><line x1="12" y1="21" x2="12" y2="23"></line><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line><line x1="1" y1="12" x2="3" y2="12"></line><line x1="21" y1="12" x2="23" y2="12"></line><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line></svg></button>
+                                <button class="theme-btn" id="theme-btn-dark" title="Dark Mode"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path></svg></button>
+                            </div>
+                        </div>
+
+                        <div class="setting-group row-group">
+                            <label>Chat font</label>
+                            <select class="settings-select" id="settings-font-select">
+                                <option value="System Default">System Default</option>
+                                <option value="Inter">Inter</option>
+                                <option value="Roboto">Roboto</option>
+                                <option value="Open Sans">Open Sans</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <div id="settings-privacy-tab" class="settings-tab-pane hidden">
+                        <h2>Privacy & Data</h2>
+
+                        <div class="setting-group">
+                            <label>Export my chats</label>
+                            <p class="setting-description">Download every conversation you've had with the assistant as a single file.</p>
+                            <button class="settings-action-btn" id="export-chats-btn">Export my chats</button>
+                        </div>
+
+                        <div class="setting-group">
+                            <label>Clear all chat history</label>
+                            <p class="setting-description">Permanently deletes every conversation in your account. This cannot be undone.</p>
+                            <button class="settings-action-btn danger" id="clear-history-btn">Clear all chat history</button>
+                        </div>
+                    </div>
+
+                    <div id="settings-help-tab" class="settings-tab-pane hidden">
+                        <h2>Help & About</h2>
+
+                        <div class="setting-group">
+                            <label>Need something the assistant can't answer?</label>
+                            <button class="settings-link-btn" id="help-handbook-btn">
+                                Find the Student Handbook
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="5" y1="12" x2="19" y2="12"></line><polyline points="12 5 19 12 12 19"></polyline></svg>
+                            </button>
+                            <button class="settings-link-btn" id="help-registrar-btn">
+                                Contact the registrar's office
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="5" y1="12" x2="19" y2="12"></line><polyline points="12 5 19 12 12 19"></polyline></svg>
+                            </button>
+                        </div>
+
+                        <div class="setting-group">
+                            <label>About</label>
+                            <p class="setting-description">HCCS Campus Assistant — v1.0</p>
+                        </div>
+                    </div>
+
+                </div>
+            </div>
+        </div>
 
     </div>
 
