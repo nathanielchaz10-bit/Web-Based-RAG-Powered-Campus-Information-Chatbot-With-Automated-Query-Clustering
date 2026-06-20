@@ -70,9 +70,12 @@ class Settings(BaseSettings):
     # scanned (too few characters per page) fall back to OCR; optionally run an
     # LLM cleanup pass on OCR output. All of this is INGESTION-time, never on
     # the query path.
-    # OCR engine: "tesseract" (local, free, offline) or "gemini" (vision model,
-    # better on tables/layout, needs the API + network).
-    INGEST_OCR_BACKEND: str = "tesseract"
+    # OCR engine: "gemini" (vision model -- better on table/grid layouts, no
+    # system dependency, reuses our existing Gemini stack) or "tesseract"
+    # (local, free, offline; kept as a pluggable fallback). Gemini is the
+    # default because our scanned source documents are table-heavy, where
+    # traditional OCR loses structure (see scripts/compare_ocr.py).
+    INGEST_OCR_BACKEND: str = "gemini"
     # Below this many characters per page, a PDF's text layer is treated as
     # scanned/empty and OCR kicks in.
     INGEST_TEXT_MIN_CHARS_PER_PAGE: int = 100
