@@ -131,11 +131,11 @@ async function loadQueryVolumeChart() {
                 datasets: [{
                     label: "Queries",
                     data: data.values, // [412, 380, 560, ...]
-                    backgroundColor: data.values.map((_, i) => {
-                        if (i === todayIndex) return "#eab308";          // today        — gold
-                        if (i === data.peak_day_index) return "#10b981"; // most queries — emerald
-                        return "#cbd5e1";                                // other days   — grey
-                    }),
+                    backgroundColor: data.values.map((_, i) =>
+                        i === data.peak_day_index
+                            ? "#eab308"   // most queries — gold bar
+                            : "#cbd5e1"   // every other day (incl. today) — grey bar
+                    ),
                     borderRadius: 4,
                     maxBarThickness: 64
                 }]
@@ -171,7 +171,9 @@ async function loadQueryVolumeChart() {
                         // Today is always the last bar in the window -> highlight its
                         // tick label in gold so "today" is obvious at a glance.
                         ticks: {
-                            color: (ctx) => ctx.index === todayIndex ? "#ca8a04" : "#64748b",
+                            // Today's date label is tinted navy + bold; the bar itself
+                            // stays grey. Gold is reserved for the busiest bar above.
+                            color: (ctx) => ctx.index === todayIndex ? "#1a365d" : "#64748b",
                             font: (ctx) => ({ size: 11, weight: ctx.index === todayIndex ? "700" : "600" }),
                             maxRotation: 0,
                             autoSkip: false
