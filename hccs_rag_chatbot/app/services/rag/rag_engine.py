@@ -4,6 +4,7 @@ import time
 from dotenv import load_dotenv
 
 from app.core.config import settings
+from app.services.rag.fusion import RagFusionChain
 
 from langchain_community.document_loaders import PyPDFLoader, Docx2txtLoader, TextLoader
 from langchain_text_splitters import RecursiveCharacterTextSplitter
@@ -268,12 +269,53 @@ def run_rag_pipeline():
     ])
 
     question_answer_chain = create_stuff_documents_chain(llm, qa_prompt)
-    # Plain retriever (NOT history-aware): the question is already rewritten by
-    # contextualize_chain before this runs, so no LLM call is nested with the
-    # embedding call here.
-    retrieval_chain = create_retrieval_chain(retriever, question_answer_chain)
 
-    rag_chain = HistoryAwareRagChain(contextualize_chain, retrieval_chain)
+    if settings.RAG_FUSION_ENABLED:
+        # RAG-Fusion path. ONE LLM call resolves history, normalizes
+        # Taglish/Tagalog to English, and expands the question into several
+        # search queries; each is retrieved and the lists are RRF-merged.
+        num_q = settings.RAG_FUSION_NUM_QUERIES
+        fusion_system_prompt = (
+            "You are a search assistant for the Holy Child Catholic School "
+            "chatbot. The student's question may be written in English, "
+            "Tagalog, or a mix (Taglish), and may rely on the earlier "
+            "conversation. Using the chat history for context, rewrite the "
+            f"latest question into {num_q} standalone search queries IN ENGLISH "
+            "that would retrieve relevant passages from school documents "
+            "(student handbook, scholarships, enrollment, facilities, school "
+            "calendar).\n"
+            "Rules:\n"
+            "- The FIRST query must be a complete, natural-language English "
+            "question that fully captures the student's intent.\n"
+            "- The remaining queries should be alternative phrasings or keyword "
+            "variants using official school terminology and synonyms.\n"
+            "- Translate any Tagalog/Taglish wording into English.\n"
+            "- Output ONE query per line. No numbering, no bullets, no extra text."
+        )
+        fusion_prompt = ChatPromptTemplate.from_messages([
+            ("system", fusion_system_prompt),
+            MessagesPlaceholder("chat_history"),
+            ("human", "{input}"),
+        ])
+        # LLM-only chain (same separation as contextualize_chain): it fully
+        # returns the query list before any embedding request is made.
+        generate_queries = fusion_prompt | llm | StrOutputParser()
 
-    print("RAG Chain Loaded Successfully.")
+        rag_chain = RagFusionChain(
+            generate_queries=generate_queries,
+            retriever=retriever,
+            question_answer_chain=question_answer_chain,
+            num_queries=num_q,
+            rrf_k=settings.RAG_FUSION_RRF_K,
+            top_k=settings.TOP_K_CHUNKS,
+        )
+        print(f"RAG Chain Loaded Successfully (RAG-Fusion enabled, {num_q} queries).")
+    else:
+        # Plain retriever (NOT history-aware): the question is already rewritten
+        # by contextualize_chain before this runs, so no LLM call is nested with
+        # the embedding call here.
+        retrieval_chain = create_retrieval_chain(retriever, question_answer_chain)
+        rag_chain = HistoryAwareRagChain(contextualize_chain, retrieval_chain)
+        print("RAG Chain Loaded Successfully.")
+
     return rag_chain

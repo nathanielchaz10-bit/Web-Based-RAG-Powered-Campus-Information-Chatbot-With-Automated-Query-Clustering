@@ -53,6 +53,18 @@ class Settings(BaseSettings):
     RAG_TEMPERATURE: float = 0.0
     MAX_CONTEXT_TOKENS: int = 4000
 
+    # --- RAG-Fusion (multi-query retrieval + reciprocal rank fusion) ---------
+    # When enabled, one Flash call rewrites the (possibly Taglish/Tagalog,
+    # possibly follow-up) question into RAG_FUSION_NUM_QUERIES standalone
+    # English search queries; each is retrieved independently and the ranked
+    # lists are merged with Reciprocal Rank Fusion before answering. Toggle off
+    # to fall back to the single-query history-aware path. The extra cost lands
+    # almost entirely on embeddings (high quota), not Flash calls.
+    RAG_FUSION_ENABLED: bool = True
+    RAG_FUSION_NUM_QUERIES: int = 4
+    # RRF dampening constant (Cormack et al., 2009); 60 is the canonical value.
+    RAG_FUSION_RRF_K: int = 60
+
     # --- Rate limiting ------------------------------------------------------
     RATE_LIMIT_MAX_REQUESTS: int = 20
     RATE_LIMIT_WINDOW_SECONDS: int = 60
