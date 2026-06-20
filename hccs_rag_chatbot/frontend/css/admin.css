@@ -397,7 +397,12 @@ body {
 .intent-green { background-color: #f0fdf4; color: #16a34a; }
 .intent-pink { background-color: #fdf2f8; color: #db2777; }
 
-.sentiment { display: flex; align-items: center; gap: 6px; font-weight: 600; font-size: 13px; }
+.sentiment { display: inline-flex; align-items: center; gap: 7px; font-weight: 600; font-size: 13px; }
+/* Leading status dot, tinted to match each sentiment's text colour. */
+.sentiment::before { content: ""; width: 8px; height: 8px; border-radius: 50%; background: currentColor; flex-shrink: 0; }
+.sentiment-positive { color: #16a34a; }   /* green  — Positive / Inquisitive */
+.sentiment-neutral  { color: #64748b; }   /* slate  — Neutral / Transactional */
+.sentiment-urgent   { color: #e11d48; }   /* rose   — Urgent / Frustrated */
 .dot { width: 8px; height: 8px; border-radius: 50%; border: 2px solid; background: transparent;}
 .dot.green { border-color: #10b981; }
 .dot.blue { border-color: #3b82f6; }
