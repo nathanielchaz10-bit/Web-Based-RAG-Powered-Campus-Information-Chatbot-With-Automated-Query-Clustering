@@ -91,7 +91,9 @@ def query_volume(db: Session = Depends(get_db), _: UserAccount = Depends(require
     values = [counts[d] for d in days]
     peak_day_index = values.index(max(values)) if any(values) else 0
     return {
-        "labels": [d.strftime("%a") for d in days],
+        # Two-line labels: weekday over its calendar date (e.g. ["Sat", "Jun 14"])
+        # so each bar is anchored to a real day rather than a bare weekday name.
+        "labels": [[d.strftime("%a"), f"{d.strftime('%b')} {d.day}"] for d in days],
         "values": values,
         "peak_day_index": peak_day_index,
     }

@@ -124,7 +124,7 @@ async function loadQueryVolumeChart() {
         new Chart(ctx, {
             type: "bar",
             data: {
-                labels: data.labels,   // ["Mon", "Tue", ...]
+                labels: data.labels,   // [["Sat", "Jun 14"], ["Sun", "Jun 15"], ...]
                 datasets: [{
                     label: "Queries",
                     data: data.values, // [412, 380, 560, ...]
@@ -146,7 +146,11 @@ async function loadQueryVolumeChart() {
                     legend: { display: false },
                     tooltip: {
                         callbacks: {
-                            title: (items) => `${items[0].label} (${items[0].formattedValue} queries)`,
+                            title: (items) => {
+                                const lbl = items[0].label;
+                                const day = Array.isArray(lbl) ? lbl.join(" ") : lbl;
+                                return `${day} — ${items[0].formattedValue} queries`;
+                            },
                             label: () => "Student questions received",
                         }
                     }
@@ -159,7 +163,9 @@ async function loadQueryVolumeChart() {
                         grid: { color: "#f1f5f9" }
                     },
                     x: {
-                        title: { display: true, text: "Day (last 7 days)", color: "#94a3b8", font: { size: 11, weight: "600" } },
+                        // No axis title: dates label each bar and the card subtitle
+                        // ("Last 7 days") already supplies the window context.
+                        ticks: { color: "#64748b", font: { size: 11, weight: "600" }, maxRotation: 0, autoSkip: false },
                         grid: { display: false }
                     }
                 }
