@@ -193,9 +193,28 @@ const BROWSE_PAGE_SIZE = 15;
 let recentInquiries = [];      // rows currently loaded into the table
 let inquirySearchTerm = "";
 let showingAllActivity = false;
+// True when browse mode was entered by typing in the search box (not the
+// button). Lets us drop back to the compact view once the search is cleared,
+// while leaving a manually-opened browse view alone.
+let autoExpandedBySearch = false;
 let currentPage = 1;
 let totalInquiries = 0;
 let searchDebounce = null;
+
+// Update the table's mode (label, heading, scroll cap) without loading data.
+function setActivityMode(showAll) {
+    showingAllActivity = showAll;
+
+    const link = document.getElementById("view-all-activity");
+    if (link) link.textContent = showAll ? "SHOW RECENT ONLY" : "VIEW ALL ACTIVITY";
+
+    const heading = document.getElementById("inquiries-heading");
+    if (heading) heading.textContent = showAll ? "ALL STUDENT INQUIRIES" : "RECENT STUDENT INQUIRIES";
+
+    // Cap the height + scroll in browse mode so a full page of rows doesn't
+    // push the rest of the dashboard down.
+    document.querySelector(".table-responsive")?.classList.toggle("expanded", showAll);
+}
 
 async function loadRecentInquiries() {
     try {
@@ -226,18 +245,9 @@ function wireViewAllActivity() {
 
     link.addEventListener("click", async (e) => {
         e.preventDefault();
-        showingAllActivity = !showingAllActivity;
+        setActivityMode(!showingAllActivity);
+        autoExpandedBySearch = false; // manual toggle now owns the mode
         currentPage = 1;
-
-        link.textContent = showingAllActivity ? "SHOW RECENT ONLY" : "VIEW ALL ACTIVITY";
-        const heading = document.getElementById("inquiries-heading");
-        if (heading) {
-            heading.textContent = showingAllActivity ? "ALL STUDENT INQUIRIES" : "RECENT STUDENT INQUIRIES";
-        }
-        // Cap the height + scroll in browse mode so a full page of rows doesn't
-        // push the rest of the dashboard down.
-        document.querySelector(".table-responsive")?.classList.toggle("expanded", showingAllActivity);
-
         await loadRecentInquiries();
     });
 }
@@ -320,8 +330,25 @@ function wireDashboardSearch() {
     if (!input) return;
     input.addEventListener("input", (e) => {
         inquirySearchTerm = e.target.value || "";
+        const hasTerm = inquirySearchTerm.trim().length > 0;
+
+        // Compact + typing -> auto-expand so the search spans the whole history.
+        if (!showingAllActivity && hasTerm) {
+            setActivityMode(true);
+            autoExpandedBySearch = true;
+        }
+
+        // Cleared the search that auto-expanded us -> collapse back to recent.
+        if (showingAllActivity && autoExpandedBySearch && !hasTerm) {
+            setActivityMode(false);
+            autoExpandedBySearch = false;
+            currentPage = 1;
+            loadRecentInquiries();
+            return;
+        }
+
         if (showingAllActivity) {
-            // Browse mode: search the server across all pages (debounced, and
+            // Browse mode: search the server across all pages (debounced,
             // reset to the first page of results).
             currentPage = 1;
             clearTimeout(searchDebounce);
