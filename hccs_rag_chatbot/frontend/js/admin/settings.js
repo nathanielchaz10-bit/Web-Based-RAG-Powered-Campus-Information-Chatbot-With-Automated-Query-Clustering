@@ -122,14 +122,5 @@ document.addEventListener('DOMContentLoaded', async () => {
     if (typeof requireAdmin === 'function') {
         const user = await requireAdmin();
         if (!user) return; // requireAdmin handles the redirect
-
-        const roleEl = document.querySelector('.sidebar-footer-profile .role');
-        if (roleEl && user.display_name) roleEl.textContent = user.display_name;
-
-        const avatarEl = document.querySelector('.sidebar-footer-profile .admin-avatar');
-        if (avatarEl && user.display_name) {
-            avatarEl.textContent = user.display_name
-                .split(' ').map(w => w[0]).join('').toUpperCase().slice(0, 2);
-        }
     }
 });
