@@ -9,6 +9,7 @@ import sys
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from app.core.database import Base, engine
+from app.core.migrations import run_migrations
 
 from app.models import (
     Role,
@@ -29,6 +30,9 @@ from app.models import (
 def init():
     print("Creating database tables...")
     Base.metadata.create_all(bind=engine)
+    # Bring any pre-existing database up to date with the current models
+    # (create_all only adds missing tables, not missing columns).
+    run_migrations(engine)
     print("")
     print("Tables created successfully:")
     for table_name in Base.metadata.tables.keys():

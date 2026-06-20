@@ -1,0 +1,63 @@
+"""Lightweight, idempotent schema migrations applied on startup.
+
+Why this exists
+---------------
+The app boots with ``Base.metadata.create_all`` (see ``main.py`` and
+``database/__init__db.py``) so a fresh database is usable with zero manual
+setup. But ``create_all`` only ever CREATES missing tables -- it never ALTERs
+tables that already exist. So when a model gains a new column, existing
+databases silently fall out of sync and break at query time.
+
+This module fills that gap. Each migration is a tiny, idempotent step
+(check-then-change) and the whole set is run right after ``create_all``. The
+result: existing databases self-upgrade on boot, matching the project's
+"no manual setup" design. Re-running is always safe -- applied migrations
+no-op.
+
+Adding a migration
+------------------
+When a model change can't be handled by ``create_all`` (a new column, an
+index, a backfill, ...), write a function that takes a live Connection,
+makes the change only if it isn't already present, and returns True if it
+actually changed something. Then append it to ``_MIGRATIONS``. Keep them in
+order; never edit or delete a shipped migration (add a new one instead).
+"""
+
+from sqlalchemy import inspect
+from sqlalchemy.engine import Connection, Engine
+
+
+def _has_column(conn: Connection, table: str, column: str) -> bool:
+    """True if ``table`` already has ``column`` (driver-agnostic check)."""
+    return any(col["name"] == column for col in inspect(conn).get_columns(table))
+
+
+def _add_resolved_query_text(conn: Connection) -> bool:
+    """query_logs.resolved_query_text: stores the history-aware chain's
+    standalone rewrite of a follow-up question, used by query clustering."""
+    if _has_column(conn, "query_logs", "resolved_query_text"):
+        return False
+    conn.exec_driver_sql(
+        "ALTER TABLE query_logs ADD COLUMN resolved_query_text TEXT"
+    )
+    return True
+
+
+# Ordered list of (description, migration_fn). Append new ones; never mutate
+# or remove existing entries.
+_MIGRATIONS = [
+    ("add query_logs.resolved_query_text", _add_resolved_query_text),
+]
+
+
+def run_migrations(engine: Engine) -> None:
+    """Apply every pending migration against ``engine``.
+
+    Idempotent and safe to call on every startup: each step checks whether it
+    is already applied and no-ops if so. Runs inside a single transaction so a
+    failure leaves the schema untouched.
+    """
+    with engine.begin() as conn:
+        for description, migration in _MIGRATIONS:
+            if migration(conn):
+                print(f"[migrations] applied: {description}")

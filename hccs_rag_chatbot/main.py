@@ -25,6 +25,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.core.database import Base, engine, SessionLocal
+from app.core.migrations import run_migrations
 import app.models  # noqa: F401  (registers all ORM models on Base.metadata)
 from app.api import auth, chat, clusters, dashboard
 from app.api.deps import ensure_roles
@@ -48,6 +49,9 @@ def on_startup():
     # Create any missing tables and make sure the default roles exist so the
     # app is usable against a fresh database with zero manual setup.
     Base.metadata.create_all(bind=engine)
+    # create_all only creates missing TABLES; apply idempotent migrations so
+    # existing databases pick up new columns/indexes too (no manual step).
+    run_migrations(engine)
     db = SessionLocal()
     try:
         ensure_roles(db)
