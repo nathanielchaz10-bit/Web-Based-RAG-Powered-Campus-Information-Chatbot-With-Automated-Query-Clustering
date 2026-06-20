@@ -120,6 +120,9 @@ async function loadQueryVolumeChart() {
     try {
         const data = await apiGet("/dashboard/query-volume");
 
+        // The window ends on today, so the final bar is always "today".
+        const todayIndex = data.labels.length - 1;
+
         const ctx = document.getElementById("queryChart");
         new Chart(ctx, {
             type: "bar",
@@ -165,7 +168,14 @@ async function loadQueryVolumeChart() {
                     x: {
                         // No axis title: dates label each bar and the card subtitle
                         // ("Last 7 days") already supplies the window context.
-                        ticks: { color: "#64748b", font: { size: 11, weight: "600" }, maxRotation: 0, autoSkip: false },
+                        // Today is always the last bar in the window -> highlight its
+                        // tick label in gold so "today" is obvious at a glance.
+                        ticks: {
+                            color: (ctx) => ctx.index === todayIndex ? "#b8860b" : "#64748b",
+                            font: (ctx) => ({ size: 11, weight: ctx.index === todayIndex ? "700" : "600" }),
+                            maxRotation: 0,
+                            autoSkip: false
+                        },
                         grid: { display: false }
                     }
                 }
