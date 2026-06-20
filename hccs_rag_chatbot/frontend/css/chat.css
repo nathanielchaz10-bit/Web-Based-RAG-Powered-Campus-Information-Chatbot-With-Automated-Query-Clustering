@@ -27,6 +27,7 @@
 
     --accent-blue: #8ab4f8;
     --accent-blue-hover: #aecbfa;
+    --accent-red: #f28b82;
     --btn-primary-bg: #ffffff;
     --btn-primary-text: #000000;
 }
@@ -54,6 +55,7 @@ body.light-theme {
 
     --accent-blue: #1a73e8;
     --accent-blue-hover: #1557b0;
+    --accent-red: #d93025;
     --btn-primary-bg: #1a73e8;
     --btn-primary-text: #ffffff;
 }
@@ -539,3 +541,40 @@ kbd {
     border-radius: 4px; padding: 4px 8px; font-size: 12px; font-family: monospace;
     color: var(--text-secondary); box-shadow: 0 2px 0 var(--border-input);
 }
+/* --- SETTINGS: shared helper text (Privacy & Data, Help & About) --- */
+.setting-description { font-size: 13px; color: var(--text-secondary); margin-bottom: 12px; line-height: 1.5; }
+
+/* --- SETTINGS: Privacy & Data action buttons --- */
+.settings-action-btn {
+    background-color: var(--bg-bot-bubble);
+    border: 1px solid var(--border-light);
+    color: var(--text-primary);
+    padding: 10px 16px;
+    border-radius: 8px;
+    font-size: 14px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: background-color 0.2s, border-color 0.2s, color 0.2s;
+}
+.settings-action-btn:hover { background-color: var(--bg-hover); }
+.settings-action-btn.danger { color: var(--accent-red); border-color: var(--accent-red); }
+.settings-action-btn.danger:hover { background-color: var(--accent-red); color: #fff; }
+
+/* --- SETTINGS: Help & About link rows --- */
+.settings-link-btn {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    width: 100%;
+    background-color: var(--bg-bot-bubble);
+    border: 1px solid var(--border-light);
+    color: var(--text-primary);
+    padding: 12px 16px;
+    border-radius: 8px;
+    font-size: 14px;
+    cursor: pointer;
+    margin-bottom: 8px;
+    transition: background-color 0.2s;
+}
+.settings-link-btn:hover { background-color: var(--bg-hover); }
+.settings-link-btn svg { color: var(--text-secondary); flex-shrink: 0; }
