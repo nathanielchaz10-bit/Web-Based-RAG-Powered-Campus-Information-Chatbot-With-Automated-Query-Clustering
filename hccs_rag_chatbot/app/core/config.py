@@ -4,8 +4,8 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 # ---------------------------------------------------------------------------
 # Path anchors (CWD-independent)
 # config.py lives at: <repo>/hccs_rag_chatbot/app/core/config.py
-#   parents[2] -> <repo>/hccs_rag_chatbot   (the app root, holds database/)
-#   parents[3] -> <repo>                     (repo root, holds docs/, chroma_db/)
+#   parents[2] -> <repo>/hccs_rag_chatbot   (the app root, holds database/, uploads/)
+#   parents[3] -> <repo>                     (repo root, holds chroma_db/)
 # ---------------------------------------------------------------------------
 APP_ROOT = Path(__file__).resolve().parents[2]
 REPO_ROOT = Path(__file__).resolve().parents[3]
@@ -34,6 +34,11 @@ class Settings(BaseSettings):
     # Absolute paths by default so the app works no matter where it's launched.
     SQLITE_DB_PATH: str = str(APP_ROOT / "database" / "hccs_rag.db")
     CHROMA_DB_PATH: str = str(REPO_ROOT / "chroma_db")
+
+    # Source documents for the RAG pipeline. Lives under the app root and is
+    # organized into per-type subfolders (docs/, pdf/, txt/); the loader walks
+    # it recursively, so dropping a file into any subfolder makes it ingestible.
+    UPLOADS_PATH: str = str(APP_ROOT / "uploads")
 
     # --- Security / JWT -----------------------------------------------------
     JWT_SECRET_KEY: str = "dev-secret-change-me-in-production"

@@ -3,9 +3,9 @@ import re
 import time
 from dotenv import load_dotenv
 
-from app.core.config import REPO_ROOT, settings
+from app.core.config import settings
 
-from langchain_community.document_loaders import PyPDFLoader, Docx2txtLoader
+from langchain_community.document_loaders import PyPDFLoader, Docx2txtLoader, TextLoader
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_google_genai import GoogleGenerativeAIEmbeddings, ChatGoogleGenerativeAI
 from langchain_chroma import Chroma
@@ -105,19 +105,27 @@ class HistoryAwareRagChain:
 
 def load_documents_from_folder(folder_path):
     documents = []
-    for file in os.listdir(folder_path):
-        file_path = os.path.join(folder_path, file)
-        
-        if file.endswith(".pdf"):
-            print(f"Loading PDF: {file}")
-            loader = PyPDFLoader(file_path)
-            documents.extend(loader.load())
-            
-        elif file.endswith(".docx"):
-            print(f"Loading DOCX: {file}")
-            loader = Docx2txtLoader(file_path)
-            documents.extend(loader.load())
-            
+    # Walk recursively so the per-type subfolders (docs/, pdf/, txt/) under the
+    # uploads directory are all picked up regardless of which one a file lands in.
+    for root, _dirs, files in os.walk(folder_path):
+        for file in files:
+            file_path = os.path.join(root, file)
+
+            if file.endswith(".pdf"):
+                print(f"Loading PDF: {file}")
+                loader = PyPDFLoader(file_path)
+                documents.extend(loader.load())
+
+            elif file.endswith(".docx"):
+                print(f"Loading DOCX: {file}")
+                loader = Docx2txtLoader(file_path)
+                documents.extend(loader.load())
+
+            elif file.endswith(".txt"):
+                print(f"Loading TXT: {file}")
+                loader = TextLoader(file_path, encoding="utf-8")
+                documents.extend(loader.load())
+
     return documents
 
 def run_rag_pipeline():
@@ -125,10 +133,10 @@ def run_rag_pipeline():
     print()
     print("Starting RAG pipeline.")
 
-    # chroma_db/ and docs/ live at the repo root, resolved via app config so
-    # this works no matter where the engine module physically sits.
+    # chroma_db/ and the uploads/ source documents are resolved via app config
+    # so this works no matter where the engine module physically sits.
     chroma_db_path = settings.CHROMA_DB_PATH
-    docs_path = str(REPO_ROOT / 'docs')
+    docs_path = settings.UPLOADS_PATH
 
     # set up the embedding model (with automatic retries on transient API errors)
     embeddings = RetryingGoogleGenerativeAIEmbeddings(model="gemini-embedding-001", task_type=None)
@@ -157,11 +165,11 @@ def run_rag_pipeline():
         print()
         print("No populated database found. Building from scratch.")
 
-        # 1. load documents ('docs' folder)
+        # 1. load documents (uploads/ folder, incl. docs/ pdf/ txt/ subfolders)
         docs = load_documents_from_folder(docs_path)
         if not docs:
             print()
-            print("Error 404: Please put a PDF or DOCX file in the 'docs' folder.")
+            print("Error 404: Please put a PDF, DOCX or TXT file in the 'uploads' folder.")
             return
 
         # 2. chunk the documents
