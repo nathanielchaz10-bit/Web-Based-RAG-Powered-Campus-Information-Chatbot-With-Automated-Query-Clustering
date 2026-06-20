@@ -366,9 +366,14 @@ function intentClass(intent) {
         "Enrollment": "intent-amber",
         "Campus Directory": "intent-purple",
         "Payments": "intent-teal",
-        "Academic Policy": "intent-gray"
+        "Portal & Accounts": "intent-indigo",
+        "Documents & Records": "intent-cyan",
+        "Student Welfare": "intent-pink",
+        "Schedule & Events": "intent-rose",
+        "Facilities & Services": "intent-green",
+        "Academic Policy": "intent-grey"
     };
-    return map[intent] || "intent-gray";
+    return map[intent] || "intent-grey";
 }
 
 function sentimentClass(sentiment) {

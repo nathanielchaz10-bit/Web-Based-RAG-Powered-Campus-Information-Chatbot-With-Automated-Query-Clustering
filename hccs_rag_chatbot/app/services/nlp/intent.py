@@ -2,11 +2,16 @@
 
 import re
 
-# The five fixed intent categories — must match dashboard.js intentClass().
+# The fixed intent categories — labels must match dashboard.js intentClass().
 INTENT_SCHOLARSHIP = "Scholarship Info"
 INTENT_ENROLLMENT = "Enrollment"
 INTENT_DIRECTORY = "Campus Directory"
 INTENT_PAYMENTS = "Payments"
+INTENT_PORTAL = "Portal & Accounts"
+INTENT_DOCUMENTS = "Documents & Records"
+INTENT_WELFARE = "Student Welfare"
+INTENT_SCHEDULE = "Schedule & Events"
+INTENT_FACILITIES = "Facilities & Services"
 INTENT_ACADEMIC_POLICY = "Academic Policy"
 
 DEFAULT_INTENT = INTENT_ACADEMIC_POLICY
@@ -20,12 +25,15 @@ DEFAULT_INTENT = INTENT_ACADEMIC_POLICY
 _KEYWORDS = {
     INTENT_SCHOLARSHIP: [
         "scholarship", "scholarships", "scholar", "scholars", "gwa",
-        "general weighted average", "grade requirement", "form 138",
+        "general weighted average", "grade requirement",
         "academic scholar", "grant", "financial assistance", "discount",
         "iskolar", "iskolarship", "merit", "deans lister",
         "latin honor", "academic excellence award", "free tuition",
         "maintain scholarship", "renew scholarship", "scholarship slot",
         "scholarship requirements", "qualify for scholarship",
+        # Academic recognition / honors (there is no separate Honors bucket)
+        "honor", "honors", "honor roll", "honor student", "with honors",
+        "with high honors", "highest honors", "honor ranking",
     ],
     INTENT_ENROLLMENT: [
         "enroll", "enrolls", "enrolled", "enrolling", "enrollment",
@@ -43,7 +51,7 @@ _KEYWORDS = {
     INTENT_DIRECTORY: [
         "where is", "where can i find", "located", "location",
         "saan ang", "saan po ang", "office hours", "office", "clinic",
-        "infirmary", "guidance office", "guidance counselor",
+        "infirmary", "guidance office",
         "registrars office", "registrar office", "directory",
         "room number", "what room", "building", "faculty", "professors office",
         "teachers office", "contact number", "phone number", "telephone number",
@@ -59,6 +67,46 @@ _KEYWORDS = {
         "promissory note", "assessment of fees", "statement of account",
         "soa", "payment deadline", "payment plan", "online payment",
         "gcash", "bank transfer",
+    ],
+    INTENT_PORTAL: [
+        "portal", "student portal", "lms", "learning management system",
+        "log in", "login", "log-in", "logging in", "sign in", "sign-in",
+        "password", "reset password", "forgot password", "forgot my password",
+        "change password", "my account", "account", "locked account",
+        "locked out", "username", "online module", "online modules", "modules",
+        "submit my activities", "submit activities", "e-learning", "e learning",
+    ],
+    INTENT_DOCUMENTS: [
+        "transcript", "transcript of records", "tor", "form 137", "form 138",
+        "good moral", "certificate", "certification",
+        "certificate of enrollment", "certified true copy", "ctc", "diploma",
+        "report card", "school records", "request a document",
+        "request my documents", "documents", "credentials",
+        "copy of my grades", "copy of grades",
+    ],
+    INTENT_WELFARE: [
+        "guidance counselor", "counselor", "counseling", "counsel",
+        "bully", "bullied", "bullying", "anti-bullying", "anti bullying",
+        "mental health", "stressed", "stress", "anxiety", "depressed",
+        "personal problem", "personal problems", "complaint",
+        "file a complaint", "harassment", "harassed", "welfare",
+        "emotional support", "talk to someone", "guidance appointment",
+    ],
+    INTENT_SCHEDULE: [
+        "flag ceremony", "morning mass", "mass schedule", "holiday", "holidays",
+        "no classes", "class suspension", "classes suspended", "suspended",
+        "suspension", "foundation day", "intramurals", "intrams", "field trip",
+        "christmas break", "semestral break", "sem break", "summer break",
+        "recognition day", "graduation ceremony", "school calendar",
+        "academic calendar", "parent teacher conference", "pta meeting",
+        "when do classes resume", "classes resume", "school event",
+    ],
+    INTENT_FACILITIES: [
+        "library", "wifi", "wi-fi", "internet", "internet connection",
+        "canteen", "cafeteria", "study area", "study areas", "study room",
+        "lost and found", "borrow a book", "borrow books", "books",
+        "computer lab", "computers", "facility", "facilities", "comfort room",
+        "parking", "locker",
     ],
     INTENT_ACADEMIC_POLICY: [
         "uniform", "uniforms", "dress code", "id lace", "pe uniform",
@@ -90,27 +138,47 @@ _KEYWORDS = {
 #     the scholarship context.
 #   - "refund policy" (Payments) vs "policy" (Academic Policy):
 #     Payments must stay before Academic Policy for the same reason.
+#   - "account" (Portal) vs "account balance" (Payments):
+#     Payments must stay before Portal so "account balance" isn't read as a
+#     login/account issue.
+#   - "certificate of enrollment" (Documents) vs "enrollment" (Enrollment):
+#     Documents must stay before Enrollment so a document request isn't read
+#     as an enrollment question.
+#   - "guidance counselor" (Welfare) vs "where is the guidance office"
+#     (Directory): Welfare stays before Directory so counseling requests route
+#     to Welfare, while pure location questions ("guidance office") stay
+#     Directory.
+#   - "library"/"clinic" location vs facilities: Directory stays before
+#     Facilities so "where is the library" is a Directory (location) hit, while
+#     "library hours"/"borrow books" fall through to Facilities.
 # If you add new keywords, re-run the collision check in this module's
 # test suite before changing _CATEGORY_ORDER.
 _CATEGORY_ORDER = [
     INTENT_SCHOLARSHIP,
     INTENT_PAYMENTS,
+    INTENT_PORTAL,
+    INTENT_DOCUMENTS,
+    INTENT_WELFARE,
+    INTENT_SCHEDULE,
     INTENT_ENROLLMENT,
     INTENT_DIRECTORY,
+    INTENT_FACILITIES,
     INTENT_ACADEMIC_POLICY,
 ]
 
 
 def classify_intent(query_text: str) -> str:
     """
-    Classifies a student query into one of five fixed intent categories.
+    Classifies a student query into one of the fixed intent categories.
 
     Args:
         query_text: The raw text of the student's question.
 
     Returns:
-        One of INTENT_SCHOLARSHIP, INTENT_ENROLLMENT, INTENT_DIRECTORY,
-        INTENT_PAYMENTS, INTENT_ACADEMIC_POLICY. Falls back to
+        One of the INTENT_* category labels (Scholarship Info, Payments,
+        Portal & Accounts, Documents & Records, Student Welfare,
+        Schedule & Events, Enrollment, Campus Directory, Facilities & Services,
+        Academic Policy). Falls back to
         INTENT_ACADEMIC_POLICY (DEFAULT_INTENT) if nothing matches.
     """
     if not query_text or not query_text.strip():
