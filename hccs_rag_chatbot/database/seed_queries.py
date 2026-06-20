@@ -14,16 +14,17 @@ each topic ships several close paraphrases and the one-off tail is expected to
 stay unclustered.
 
 Run from inside hccs_rag_chatbot/:
-    python database/seed_queries.py
-or:
-    python -m database.seed_queries
+    python database/seed_queries.py            # append (skips existing)
+    python database/seed_queries.py --reset    # wipe queries + clusters first
 
 Then trigger clustering as an admin (dashboard "Query Clusters" page, or
 POST /clusters/run). Embedding + labeling call Gemini, so GEMINI_API_KEY must
 be set in your .env.
 
-Idempotent: a query whose exact text is already in the DB is skipped, so it's
-safe to run more than once.
+Idempotent: a query whose exact text is already in the DB is skipped, so a
+plain run is safe to repeat. Use --reset when you've changed the intent/
+sentiment logic and want existing rows re-classified — it clears query_logs
+(and the clusters/keywords/runs that reference them) before re-seeding.
 """
 
 import os
@@ -233,13 +234,36 @@ SAMPLE_QUERIES = {
 }
 
 
-def seed():
+def _reset(db):
+    """Wipe all query + clustering data so a fresh seed recomputes everything.
+
+    Deleted in FK-safe order (children first): cluster_keywords -> clusters ->
+    clustering_runs -> query_logs. Run this when you've changed the intent or
+    sentiment logic and want existing rows re-classified (a plain re-seed skips
+    queries whose text is already present, so it won't recompute them).
+    """
+    from app.models.cluster_keyword import ClusterKeyword
+    from app.models.cluster import Cluster
+    from app.models.clustering_run import ClusteringRun
+
+    kw = db.query(ClusterKeyword).delete()
+    cl = db.query(Cluster).delete()
+    runs = db.query(ClusteringRun).delete()
+    qs = db.query(QueryLog).delete()
+    db.commit()
+    print(f"Reset: removed {qs} queries, {cl} clusters, {kw} keywords, {runs} runs.")
+
+
+def seed(reset: bool = False):
     # Ensure tables exist so this works even against a brand-new database.
     Base.metadata.create_all(bind=engine)
 
     db = SessionLocal()
     inserted = skipped = 0
     try:
+        if reset:
+            _reset(db)
+
         existing = {t for (t,) in db.query(QueryLog.query_text).all()}
 
         flat = [(topic, q) for topic, qs in SAMPLE_QUERIES.items() for q in qs]
@@ -282,4 +306,4 @@ def seed():
 
 
 if __name__ == "__main__":
-    seed()
+    seed(reset="--reset" in sys.argv)
