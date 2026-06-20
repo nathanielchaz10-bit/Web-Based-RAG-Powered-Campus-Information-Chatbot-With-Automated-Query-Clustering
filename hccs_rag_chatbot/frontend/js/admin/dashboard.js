@@ -171,10 +171,17 @@ async function loadQueryVolumeChart() {
                         // Today is always the last bar in the window -> highlight its
                         // tick label in gold so "today" is obvious at a glance.
                         ticks: {
-                            // Today's date label is tinted navy + bold; the bar itself
-                            // stays grey. Gold is reserved for the busiest bar above.
-                            color: (ctx) => ctx.index === todayIndex ? "#1a365d" : "#64748b",
-                            font: (ctx) => ({ size: 11, weight: ctx.index === todayIndex ? "700" : "600" }),
+                            // Busiest day's label is gold to match its bar; today's
+                            // label is navy + bold. Everything else is plain grey.
+                            color: (ctx) => {
+                                if (ctx.index === data.peak_day_index) return "#eab308"; // matches gold bar
+                                if (ctx.index === todayIndex) return "#1a365d";          // today
+                                return "#64748b";
+                            },
+                            font: (ctx) => ({
+                                size: 11,
+                                weight: (ctx.index === todayIndex || ctx.index === data.peak_day_index) ? "700" : "600"
+                            }),
                             maxRotation: 0,
                             autoSkip: false
                         },
