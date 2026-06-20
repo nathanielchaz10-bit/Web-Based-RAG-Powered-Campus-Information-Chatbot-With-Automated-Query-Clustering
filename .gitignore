@@ -12,6 +12,11 @@ __pycache__/
 # Local Databases (Groupmates will generate their own)
 chroma_db/
 analytics.db
+hccs_rag_chatbot/database/hccs_rag.db
+# SQLite side-car / backup files
+*.db-wal
+*.db-shm
+*.db.bak
 
 # Bake-off embedding cache (regenerated locally)
 bakeoff_large_vectors.npy
