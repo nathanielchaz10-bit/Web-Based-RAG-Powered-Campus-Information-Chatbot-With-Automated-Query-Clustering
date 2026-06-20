@@ -38,10 +38,17 @@ document.addEventListener("DOMContentLoaded", async () => {
 
     await loadClusterOverview();
     wireRunClusteringButton();
+    wireClusterSearch();
     wireModalLogic();
 });
 
 let topicChart = null;
+
+// Latest clusters from the server, plus the current header-search term. The
+// search box filters this list (by label + keywords) into what the chart and
+// cards actually render, without re-fetching.
+let allClusters = [];
+let clusterSearchTerm = "";
 
 // Raw-queries modal state. Loaded once per "View Raw Queries" click and kept
 // around so the All / Low Confidence toggle can re-filter without re-fetching.
@@ -59,13 +66,54 @@ async function loadClusterOverview() {
 }
 
 function renderOverview(data) {
-    const clusters = (data && Array.isArray(data.clusters)) ? data.clusters : [];
+    allClusters = (data && Array.isArray(data.clusters)) ? data.clusters : [];
 
     renderTotalQueries(data?.total_queries ?? 0, data?.query_growth_percent);
     renderSentiment(data?.sentiment);
-    renderChart(clusters);
-    renderClusterCards(clusters);
+    applyClusterFilter();
     renderClusteringStatus(data?.last_run_status);
+}
+
+// Filter allClusters by the header search term, matching against the cluster
+// label and its keywords, then re-render the chart + cards from the result.
+function getFilteredClusters() {
+    const term = clusterSearchTerm.trim().toLowerCase();
+    if (!term) return allClusters;
+    return allClusters.filter(c => {
+        const label = (c.cluster_label || "").toLowerCase();
+        const keywords = Array.isArray(c.keywords) ? c.keywords.join(" ").toLowerCase() : "";
+        return label.includes(term) || keywords.includes(term);
+    });
+}
+
+function applyClusterFilter() {
+    const filtered = getFilteredClusters();
+    const term = clusterSearchTerm.trim();
+
+    // When a search hides every cluster (but clusters do exist), say "no
+    // matches" instead of the default "no clusters yet — run clustering" copy.
+    const cardEmpty = document.getElementById("cluster-empty-state");
+    const chartEmpty = document.getElementById("chart-empty-state");
+    if (term && allClusters.length && !filtered.length) {
+        if (cardEmpty) cardEmpty.textContent = `No clusters match “${term}”.`;
+        if (chartEmpty) chartEmpty.textContent = "No matches.";
+    } else {
+        if (cardEmpty) cardEmpty.innerHTML =
+            'No clusters yet. Click <strong>Run Clustering</strong> once there are enough student queries logged.';
+        if (chartEmpty) chartEmpty.textContent = "No clusters yet.";
+    }
+
+    renderChart(filtered);
+    renderClusterCards(filtered);
+}
+
+function wireClusterSearch() {
+    const input = document.querySelector(".search-bar input");
+    if (!input) return;
+    input.addEventListener("input", (e) => {
+        clusterSearchTerm = e.target.value || "";
+        applyClusterFilter();
+    });
 }
 
 function renderTotalQueries(total, growthPercent) {
