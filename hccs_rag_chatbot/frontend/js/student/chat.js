@@ -375,9 +375,9 @@ document.addEventListener("DOMContentLoaded", async () => {
         popoverSwitchAccount.addEventListener("click", () => {
             // 1. Clear the local storage token
             if (typeof removeToken === "function") removeToken();
-            
+
             // 2. Redirect directly to the backend Google Login route
-            window.location.href = "/api/auth/login"; 
+            window.location.href = "/api/auth/login";
         });
     }
 
@@ -426,6 +426,67 @@ document.addEventListener("DOMContentLoaded", async () => {
             document.getElementById(targetPaneId).classList.remove("hidden");
         });
     });
+
+    // ==========================================
+    // --- PRIVACY & DATA LOGIC ---
+    // ==========================================
+    async function exportChats() {
+        try {
+            const data = await apiGet("/chat/export");
+            const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement("a");
+            a.href = url;
+            a.download = `hccs-chat-export-${new Date().toISOString().slice(0, 10)}.json`;
+            document.body.appendChild(a);
+            a.click();
+            a.remove();
+            URL.revokeObjectURL(url);
+        } catch (err) {
+            console.error("Export failed:", err);
+            alert("Could not export your chats. Please try again.");
+        }
+    }
+
+    async function clearAllHistory() {
+        if (!confirm("This will permanently delete all of your chat history. This cannot be undone. Continue?")) return;
+        try {
+            await apiDelete("/chat/sessions");
+            resetChatUI();
+            await loadSidebarHistory();
+        } catch (err) {
+            console.error("Clear history failed:", err);
+            alert("Could not clear your chat history. Please try again.");
+        }
+    }
+
+    const exportChatsBtn = document.getElementById("export-chats-btn");
+    if (exportChatsBtn) exportChatsBtn.addEventListener("click", exportChats);
+
+    const clearHistoryBtn = document.getElementById("clear-history-btn");
+    if (clearHistoryBtn) clearHistoryBtn.addEventListener("click", clearAllHistory);
+
+    // ==========================================
+    // --- HELP & ABOUT LOGIC ---
+    // Routes both buttons through the assistant itself rather than hardcoding
+    // a handbook URL or registrar email here -- those live in the indexed
+    // documents already and may change without this file being updated.
+    // ==========================================
+    function askAssistant(query) {
+        if (settingsOverlay) settingsOverlay.classList.add("hidden");
+        chatInput.value = query;
+        handleSend();
+    }
+
+    const helpHandbookBtn = document.getElementById("help-handbook-btn");
+    if (helpHandbookBtn) {
+        helpHandbookBtn.addEventListener("click", () => askAssistant("Where can I find the student handbook?"));
+    }
+
+    const helpRegistrarBtn = document.getElementById("help-registrar-btn");
+    if (helpRegistrarBtn) {
+        helpRegistrarBtn.addEventListener("click", () => askAssistant("How do I contact the registrar's office?"));
+    }
 
     // ==========================================
     // --- APPEARANCE & THEME LOGIC ---
