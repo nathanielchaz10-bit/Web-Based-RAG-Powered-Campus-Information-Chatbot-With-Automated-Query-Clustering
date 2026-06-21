@@ -10,6 +10,8 @@ from dataclasses import dataclass
 # Defaults; the pipeline passes the values from app settings instead.
 DEFAULT_TEXT_MIN_CHARS_PER_PAGE = 100
 DEFAULT_OCR_MIN_CHARS_PER_PAGE = 50
+# A page whose raster images cover at least this fraction of it is "image-heavy".
+DEFAULT_PAGE_IMAGE_COVERAGE = 0.5
 
 
 @dataclass
@@ -37,6 +39,36 @@ def assess_extraction(
         chars_per_page=cpp,
         looks_scanned=cpp < min_chars_per_page,
     )
+
+
+def page_needs_ocr(
+    page_chars: int,
+    raster_coverage: float,
+    *,
+    force: bool = False,
+    text_min_chars: int = DEFAULT_TEXT_MIN_CHARS_PER_PAGE,
+    coverage_threshold: float = DEFAULT_PAGE_IMAGE_COVERAGE,
+) -> bool:
+    """Decide whether a SINGLE PDF page should be OCR'd.
+
+    This is what lets OCR fire per page inside an otherwise-digital PDF, instead
+    of an all-or-nothing decision for the whole file:
+
+    - ``force``: the admin ticked "Force OCR" (e.g. a color-coded calendar whose
+      meaning lives in vector cell-shading the text layer can't express).
+    - little/no extractable text -> the page is scanned or image-only.
+    - mostly a raster image with only a little text -> a figure/diagram/screenshot
+      dropped into a digital page; OCR recovers the text trapped in the image.
+      (The text cap avoids OCR'ing a full-text page that merely has a big
+      decorative image or watermark.)
+    """
+    if force:
+        return True
+    if page_chars < text_min_chars:
+        return True
+    if raster_coverage >= coverage_threshold and page_chars < text_min_chars * 8:
+        return True
+    return False
 
 
 def grade_confidence(

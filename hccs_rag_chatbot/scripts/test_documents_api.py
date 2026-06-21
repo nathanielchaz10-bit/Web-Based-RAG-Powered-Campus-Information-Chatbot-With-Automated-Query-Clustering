@@ -57,7 +57,8 @@ from app.models.document_chunk import DocumentChunk  # noqa: E402
 
 # ----------------------- Gemini boundary fakes -----------------------------
 # A toggleable in-memory stand-in for the Chroma vector store + the OCR backend.
-STATE = {"get_should_fail": False, "add_should_fail": False, "ocr_text": "word " * 300}
+STATE = {"get_should_fail": False, "add_should_fail": False,
+         "ocr_text": "word " * 300, "color_aware": None}
 
 
 class _FakeCollection:
@@ -91,15 +92,28 @@ def _fake_get_vectorstore():
     return FAKE
 
 
-def _fake_get_ocr_backend(name):
-    return lambda path, dpi=None: STATE["ocr_text"]
+def _fake_page_backend(name):
+    """Stand-in for per-page PDF OCR: returns STATE['ocr_text'] for each page."""
+    def run(path, pages=None, color_aware=False):
+        STATE["color_aware"] = color_aware
+        return {i: STATE["ocr_text"] for i in (pages or [])}
+    return run
+
+
+def _fake_image_backend(name):
+    """Stand-in for docx embedded-image OCR."""
+    def run(images, color_aware=False):
+        STATE["color_aware"] = color_aware
+        return [STATE["ocr_text"] for _ in images]
+    return run
 
 
 # index_document_text() resolves get_vectorstore from its module globals, and
-# the pipeline imports get_ocr_backend lazily from the ocr module, so patching
-# the module attributes is enough.
+# the pipeline resolves the OCR backends from the ocr module, so patching the
+# module attributes is enough (real extraction/coverage still run for real).
 indexer.get_vectorstore = _fake_get_vectorstore
-ocr_mod.get_ocr_backend = _fake_get_ocr_backend
+ocr_mod.get_page_ocr_backend = _fake_page_backend
+ocr_mod.get_image_ocr_backend = _fake_image_backend
 
 from main import app  # noqa: E402  (import AFTER env + patches are in place)
 
@@ -131,12 +145,12 @@ def db_doc(doc_id):
         db.close()
 
 
-def _upload(client, path, name, ctype, doc_type):
+def _upload(client, path, name, ctype, doc_type, force_ocr=False):
     with open(path, "rb") as fh:
         return client.post(
             "/documents/upload",
             files={"file": (name, fh, ctype)},
-            data={"document_type": doc_type},
+            data={"document_type": doc_type, "force_ocr": str(force_ocr).lower()},
         )
 
 
@@ -196,6 +210,25 @@ def main():
         check("scan indexed", j.get("indexed") is True, str(j))
         check("scan sidecar .txt written",
               os.path.exists(os.path.join(UPLOADS, "txt", "HCCS_School_Facilities_Directory.txt")))
+
+        print("\n-- Force-OCR a digital PDF (calendar) -> OCR + color-aware prompt --")
+        STATE["ocr_text"] = "word " * 400
+        STATE["color_aware"] = None
+        r = _upload(
+            client,
+            os.path.join(FIXTURES, "pdf", "2025-2026_School_Calendar.pdf"),
+            "Calendar_Forced.pdf",
+            "application/pdf",
+            "CALENDAR",
+            force_ocr=True,
+        )
+        j = r.json()
+        check("force upload 200", r.status_code == 200, r.text)
+        check("force method ocr:gemini (not text_layer)", j.get("extraction_method") == "ocr:gemini", str(j))
+        check("force used color-aware prompt", STATE["color_aware"] is True, str(STATE["color_aware"]))
+        check("force indexed", j.get("indexed") is True, str(j))
+        check("force sidecar .txt written",
+              os.path.exists(os.path.join(UPLOADS, "txt", "Calendar_Forced.txt")))
 
         print("\n-- unreadable scan -> held for review --")
         STATE["ocr_text"] = "x"  # OCR recovers almost nothing

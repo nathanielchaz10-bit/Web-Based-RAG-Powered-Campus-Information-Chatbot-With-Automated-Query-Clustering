@@ -12,6 +12,7 @@ document.addEventListener("DOMContentLoaded", () => {
     const startBtn = document.getElementById("start-upload-btn");
     const pipeline = document.getElementById("upload-pipeline");
     const docTypeSelect = document.getElementById("doc-type-select");
+    const forceOcrCheck = document.getElementById("force-ocr-check");
     const docList = document.getElementById("doc-list");
 
     const stepExtract = document.getElementById("step-extract");
@@ -161,6 +162,7 @@ document.addEventListener("DOMContentLoaded", () => {
         dropZone.style.display = "block";
         resetDropZone();
         pipeline.classList.add("hidden");
+        if (forceOcrCheck) forceOcrCheck.checked = false;
         startBtn.disabled = true;
         startBtn.textContent = "Start Processing";
     }
@@ -211,6 +213,7 @@ document.addEventListener("DOMContentLoaded", () => {
             const fd = new FormData();
             fd.append("file", selectedFile);
             fd.append("document_type", docTypeSelect.value);
+            fd.append("force_ocr", forceOcrCheck && forceOcrCheck.checked ? "true" : "false");
 
             const res = await apiUpload("/documents/upload", fd);
 

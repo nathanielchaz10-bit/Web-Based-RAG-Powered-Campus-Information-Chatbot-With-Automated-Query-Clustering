@@ -86,6 +86,15 @@ class Settings(BaseSettings):
     INGEST_OCR_DPI: int = 300
     # Run an LLM cleanup pass over OCR output (reformat tables, fix OCR noise).
     INGEST_LLM_CLEANUP: bool = False
+    # Per-page OCR: even inside an otherwise-digital PDF, OCR a single page when a
+    # raster image covers at least this fraction of it AND the page carries little
+    # text (a scanned page / figure / screenshot dropped into a digital document).
+    INGEST_PAGE_IMAGE_COVERAGE: float = 0.5
+    # docx embedded-image OCR: a .docx's pictures live in its zip under
+    # word/media/. We OCR those too (text trapped in diagrams/screenshots), but
+    # skip images smaller than this many pixels (area) so logos/icons don't add
+    # noise. 50_000 ~= a 224x224 image.
+    INGEST_DOCX_MIN_IMAGE_PIXELS: int = 50_000
 
     # --- Rate limiting ------------------------------------------------------
     RATE_LIMIT_MAX_REQUESTS: int = 20

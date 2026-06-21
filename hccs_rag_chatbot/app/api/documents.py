@@ -76,6 +76,7 @@ def _index_and_record(db: Session, doc: Document, text: str) -> int:
 def upload_document(
     file: UploadFile = File(...),
     document_type: str = Form(...),
+    force_ocr: bool = Form(False),
     db: Session = Depends(get_db),
     user: UserAccount = Depends(require_admin),
 ):
@@ -96,9 +97,10 @@ def upload_document(
     with open(dest_path, "wb") as fh:
         fh.write(content)
 
-    # Extract text (Gemini vision OCR for scanned PDFs, per INGEST_OCR_BACKEND).
+    # Extract text. OCR fires per page for scanned/image-heavy pages; force_ocr
+    # OCRs everything with the color/layout-aware prompt (table/calendar docs).
     try:
-        result = ingest_document(dest_path)
+        result = ingest_document(dest_path, force_ocr=force_ocr)
     except Exception as exc:
         # Don't leave an unusable file lying around if extraction blew up.
         try:
@@ -107,10 +109,11 @@ def upload_document(
             pass
         raise HTTPException(status_code=502, detail=f"Document extraction failed: {exc}")
 
-    # For OCR'd (scanned) docs, persist the recovered text as a sidecar .txt so a
-    # future full rebuild -- which reads files, not the live index -- recovers it
-    # too (mirrors how the seeded facilities directory is handled).
-    if result.method.startswith("ocr"):
+    # When OCR contributed text (scanned pages, or a docx's embedded images),
+    # persist the recovered text as a sidecar .txt so a future full rebuild --
+    # which reads files, not the live index -- recovers it too (mirrors how the
+    # seeded facilities directory is handled).
+    if result.ocr_used:
         txt_dir = os.path.join(settings.UPLOADS_PATH, "txt")
         os.makedirs(txt_dir, exist_ok=True)
         sidecar = os.path.join(txt_dir, os.path.splitext(filename)[0] + ".txt")
@@ -235,8 +238,12 @@ def approve_document(
     if not os.path.exists(path):
         raise HTTPException(status_code=410, detail="Source file is no longer available.")
 
+    # If the original ingestion used OCR (method "ocr:*" / "hybrid:*"), re-OCR on
+    # approval too, so re-extraction doesn't silently fall back to a worse text
+    # layer than what was first held.
+    prior_ocr = (doc.extraction_method or "").split(":")[0] in ("ocr", "hybrid")
     try:
-        result = ingest_document(path)
+        result = ingest_document(path, force_ocr=prior_ocr)
     except Exception as exc:
         raise HTTPException(status_code=502, detail=f"Re-extraction failed: {exc}")
 
