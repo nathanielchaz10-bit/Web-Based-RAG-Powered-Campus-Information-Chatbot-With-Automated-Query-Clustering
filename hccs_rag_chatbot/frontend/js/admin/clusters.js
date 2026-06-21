@@ -273,6 +273,45 @@ function renderClusteringStatus(status) {
     text.textContent = info.text;
 }
 
+// Raise a header-bell notification summarising a just-finished run, keyed off
+// the run status the server reports back.
+function notifyClusteringRun(data) {
+    const status = data?.last_run_status;
+    const count = Array.isArray(data?.clusters) ? data.clusters.length : 0;
+
+    const MESSAGES = {
+        COMPLETED: {
+            type: "clustering",
+            title: "Clustering run complete",
+            message: count
+                ? `${count} ${count === 1 ? "cluster" : "clusters"} identified from student queries.`
+                : "The run finished successfully.",
+        },
+        INSUFFICIENT: {
+            type: "info",
+            title: "Clustering run skipped",
+            message: "Not enough student queries logged yet to form clusters.",
+        },
+        FAILED_EXTRACTION: {
+            type: "error",
+            title: "Clustering run failed",
+            message: "Could not extract query data for clustering.",
+        },
+        FAILED_ML: {
+            type: "error",
+            title: "Clustering run failed",
+            message: "The clustering algorithm could not complete.",
+        },
+    };
+
+    const note = MESSAGES[status] || {
+        type: "clustering",
+        title: "Clustering run finished",
+        message: "The clustering service has finished running.",
+    };
+    window.pushNotification?.(note);
+}
+
 function wireRunClusteringButton() {
     const btn = document.getElementById("run-clustering-btn");
     if (!btn) return;
@@ -285,9 +324,15 @@ function wireRunClusteringButton() {
         try {
             const data = await apiPost("/clusters/run", {});
             renderOverview(data);
+            notifyClusteringRun(data);
         } catch (err) {
             console.error("Clustering run failed:", err);
             alert(err.message || "Clustering run failed. Please try again.");
+            window.pushNotification?.({
+                type: "error",
+                title: "Clustering run failed",
+                message: err.message || "The clustering run could not be completed.",
+            });
         } finally {
             btn.disabled = false;
             btn.textContent = originalText;

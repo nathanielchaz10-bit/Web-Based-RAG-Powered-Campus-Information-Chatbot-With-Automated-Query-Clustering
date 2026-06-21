@@ -58,6 +58,32 @@ def _abs_path(file_path: str) -> str:
     return os.path.join(_UPLOADS_PARENT, file_path)
 
 
+# Rough chars-per-token ratio for English prose. We don't run the Gemini
+# tokenizer at request time (it isn't local), and the chunker splits on
+# characters, so token counts aren't stored. ~4 chars/token is the standard
+# heuristic and is plenty accurate for a corpus-size headline figure.
+_CHARS_PER_TOKEN = 4
+
+
+def _dir_size_bytes(path: str) -> int:
+    """Total on-disk size of everything under ``path`` (the Chroma store).
+
+    Walks the directory so the figure reflects the real vector-index footprint
+    (SQLite file + HNSW index segments), not an estimate. Returns 0 if the
+    store hasn't been created yet.
+    """
+    total = 0
+    if not path or not os.path.isdir(path):
+        return 0
+    for root, _dirs, files in os.walk(path):
+        for name in files:
+            try:
+                total += os.path.getsize(os.path.join(root, name))
+            except OSError:
+                pass  # file vanished mid-walk; skip it
+    return total
+
+
 def _month_window(now: datetime) -> tuple[datetime, datetime]:
     """Return (this_month_start, last_month_start) as naive UTC datetimes,
     for the Document Directory's 'retrievals this month' (and trend) metric."""
@@ -86,14 +112,13 @@ def _index_and_record(db: Session, doc: Document, text: str) -> int:
     return len(added)
 
 
-@router.post("/upload")
-def upload_document(
-    file: UploadFile = File(...),
-    document_type: str = Form(...),
-    force_ocr: bool = Form(False),
-    db: Session = Depends(get_db),
-    user: UserAccount = Depends(require_admin),
-):
+def _store_and_extract(file: UploadFile, *, force_ocr: bool):
+    """Save an uploaded file to its uploads/<sub>/ folder and extract its text.
+
+    Shared by upload and replace. Returns (filename, subfolder, content,
+    result). Raises HTTPException for a bad extension or a failed extraction
+    (cleaning up the half-written file in the latter case).
+    """
     filename = _safe_filename(file.filename or "")
     ext = _extension(filename)
     if ext not in _ALLOWED:
@@ -126,37 +151,37 @@ def upload_document(
     # When OCR contributed text (scanned pages, or a docx's embedded images),
     # persist the recovered text as a sidecar .txt so a future full rebuild --
     # which reads files, not the live index -- recovers it too (mirrors how the
-    # seeded facilities directory is handled).
+    # seeded facilities directory is handled). When a (non-txt) file is read
+    # cleanly without OCR, drop any stale sidecar from a prior OCR ingest of the
+    # same name so a rebuild can't pick up outdated recovered text.
+    txt_dir = os.path.join(settings.UPLOADS_PATH, "txt")
+    sidecar = os.path.join(txt_dir, os.path.splitext(filename)[0] + ".txt")
     if result.ocr_used:
-        txt_dir = os.path.join(settings.UPLOADS_PATH, "txt")
         os.makedirs(txt_dir, exist_ok=True)
-        sidecar = os.path.join(txt_dir, os.path.splitext(filename)[0] + ".txt")
         with open(sidecar, "w", encoding="utf-8") as fh:
             fh.write(result.text)
+    elif ext != "txt" and os.path.exists(sidecar):
+        try:
+            os.remove(sidecar)
+        except OSError:
+            pass
 
-    doc = Document(
-        document_name=filename,
-        document_type=document_type,
-        file_path=f"uploads/{subfolder}/{filename}",
-        upload_size=len(content),
-        uploaded_by_user_id=user.user_id,
-        extraction_method=result.method,
-        extraction_confidence=result.confidence,
-        needs_review=result.needs_review,
-        total_token=result.chars,
-        is_active=False,
-    )
-    db.add(doc)
-    db.flush()  # assign document_id
+    return filename, subfolder, content, result
 
-    # Decide what to do with the extracted text:
-    #   - low extraction confidence -> hold for human review (don't index).
-    #   - confident extraction -> index now; but if indexing can't complete
-    #     (missing/invalid API key, exhausted quota, a transient Google error,
-    #     or every chunk getting filtered) HOLD the document instead of failing
-    #     the whole upload. The file and its extracted text are already saved, so
-    #     holding lets the admin retry with "Approve" once the cause is fixed --
-    #     far better than a 500 that loses the work and explains nothing.
+
+def _finalize_index(db: Session, doc: Document, result) -> dict:
+    """Apply an extraction result to ``doc`` and index it if confident.
+
+    ``doc`` must already have a document_id (flushed). Copies the ingestion
+    verdict onto the row, then: holds the doc for review on low confidence, and
+    otherwise indexes it -- holding instead of failing if indexing produces no
+    chunks. Returns {indexed, chunk_count, index_error, message}.
+    """
+    doc.extraction_method = result.method
+    doc.extraction_confidence = result.confidence
+    doc.needs_review = result.needs_review
+    doc.total_token = result.chars
+
     indexed = False
     chunk_count = 0
     index_error = None
@@ -176,9 +201,7 @@ def upload_document(
             message = "Indexed and live."
         else:
             # Extraction was fine but nothing made it into the index; hold it so
-            # the upload isn't silently "active" with zero searchable chunks. The
-            # concise reason goes in `message`; the raw cause stays in
-            # `index_error` for the admin/logs.
+            # the doc isn't silently "active" with zero searchable chunks.
             doc.needs_review = True
             message = (
                 "Saved, but indexing did not complete; held for review — "
@@ -188,9 +211,53 @@ def upload_document(
                 "held for review — retry with Approve."
             )
 
+    return {
+        "indexed": indexed,
+        "chunk_count": chunk_count,
+        "index_error": index_error,
+        "message": message,
+    }
+
+
+def _bump_version(version: str | None) -> str:
+    """Increment a 'major.minor' version string by 0.1 (1.0 -> 1.1)."""
+    try:
+        return f"{float(version) + 0.1:.1f}"
+    except (TypeError, ValueError):
+        return "1.1"
+
+
+@router.post("/upload")
+def upload_document(
+    file: UploadFile = File(...),
+    document_type: str = Form(...),
+    force_ocr: bool = Form(False),
+    db: Session = Depends(get_db),
+    user: UserAccount = Depends(require_admin),
+):
+    filename, subfolder, content, result = _store_and_extract(file, force_ocr=force_ocr)
+
+    doc = Document(
+        document_name=filename,
+        document_type=document_type,
+        file_path=f"uploads/{subfolder}/{filename}",
+        upload_size=len(content),
+        uploaded_by_user_id=user.user_id,
+        is_active=False,
+    )
+    db.add(doc)
+    db.flush()  # assign document_id
+
+    # Index the extracted text (or hold it for review). If indexing can't
+    # complete -- missing/invalid API key, exhausted quota, a transient Google
+    # error, or every chunk getting filtered -- the doc is HELD instead of
+    # failing the upload: the file and its text are already saved, so the admin
+    # can retry with "Approve" once the cause is fixed, rather than getting a
+    # 500 that loses the work and explains nothing.
+    outcome = _finalize_index(db, doc, result)
     db.commit()
 
-    if indexed:
+    if outcome["indexed"]:
         rag_service.reset_chain()  # chat reloads the corpus on next query
 
     return {
@@ -202,10 +269,7 @@ def upload_document(
         "extraction_method": result.method,
         "confidence": result.confidence,
         "needs_review": doc.needs_review,
-        "indexed": indexed,
-        "chunk_count": chunk_count,
-        "index_error": index_error,
-        "message": message,
+        **outcome,
     }
 
 
@@ -248,6 +312,32 @@ def list_documents(
         }
         for d in docs
     ]
+
+
+@router.get("/stats")
+def corpus_stats(
+    db: Session = Depends(get_db),
+    user: UserAccount = Depends(require_admin),
+):
+    """Headline figures for the document-directory sidebar cards.
+
+    - total_tokens: estimated token size of the whole indexed corpus, derived
+      from the stored chunk text (sum of chunk lengths / chars-per-token).
+    - vector_index_bytes: real on-disk size of the Chroma vector store.
+
+    Both scale with how much knowledge has been ingested, so the cards now move
+    as documents are added/removed instead of showing fixed placeholders.
+    """
+    total_chunks = db.query(func.count(DocumentChunk.chunk_id)).scalar() or 0
+    total_chars = db.query(
+        func.coalesce(func.sum(func.length(DocumentChunk.chunk_text)), 0)
+    ).scalar() or 0
+
+    return {
+        "total_chunks": int(total_chunks),
+        "total_tokens": int(total_chars) // _CHARS_PER_TOKEN,
+        "vector_index_bytes": _dir_size_bytes(settings.CHROMA_DB_PATH),
+    }
 
 
 @router.post("/{document_id}/approve")
@@ -302,6 +392,78 @@ def approve_document(
         "indexed": True,
         "chunk_count": chunk_count,
         "message": "Approved and indexed.",
+    }
+
+
+@router.post("/{document_id}/replace")
+def replace_document(
+    document_id: int,
+    file: UploadFile = File(...),
+    document_type: str = Form(None),
+    force_ocr: bool = Form(False),
+    db: Session = Depends(get_db),
+    user: UserAccount = Depends(require_admin),
+):
+    """Replace a document's contents with a newer version of the same file.
+
+    Keeps the SAME document_id (and therefore its retrieval history and
+    analytics) while swapping in a freshly uploaded file: old vectors, chunks,
+    and the prior file are removed, the new file is ingested and re-indexed, and
+    the row is updated in place with its version bumped (1.0 -> 1.1). Re-uses the
+    upload pipeline, so the same OCR/confidence/hold-for-review rules apply.
+
+    ``document_type`` is optional -- omit it to keep the existing category.
+    """
+    doc = db.query(Document).get(document_id)
+    if not doc:
+        raise HTTPException(status_code=404, detail="Document not found.")
+
+    old_path = _abs_path(doc.file_path)
+
+    # Ingest the new file first so that, if extraction fails, the existing
+    # document is left untouched (the helper deletes its own half-written file).
+    filename, subfolder, content, result = _store_and_extract(file, force_ocr=force_ocr)
+    new_rel = f"uploads/{subfolder}/{filename}"
+
+    # Drop the old version's vectors and chunk rows, then its file if the new
+    # upload didn't already overwrite it (different name/extension).
+    indexer.remove_document(document_id)
+    db.query(DocumentChunk).filter(
+        DocumentChunk.document_id == document_id
+    ).delete(synchronize_session=False)
+    if doc.file_path != new_rel and os.path.exists(old_path):
+        try:
+            os.remove(old_path)
+        except OSError:
+            pass
+
+    doc.document_name = filename
+    if document_type:
+        doc.document_type = document_type
+    doc.file_path = new_rel
+    doc.upload_size = len(content)
+    doc.version = _bump_version(doc.version)
+    doc.is_active = False
+    db.flush()
+
+    outcome = _finalize_index(db, doc, result)
+    db.commit()
+
+    # The corpus changed either way (old vectors gone, new ones maybe added), so
+    # always rebuild the chat chain.
+    rag_service.reset_chain()
+
+    return {
+        "document_id": doc.document_id,
+        "document_name": filename,
+        "document_type": doc.document_type,
+        "version": doc.version,
+        "pages": result.pages,
+        "chars": result.chars,
+        "extraction_method": result.method,
+        "confidence": result.confidence,
+        "needs_review": doc.needs_review,
+        **outcome,
     }
 
 
