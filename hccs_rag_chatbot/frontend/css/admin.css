@@ -608,35 +608,10 @@ body {
 
 .modal-footer { padding: 16px 24px; border-top: 1px solid #e2e8f0; background: #f8fafc; display: flex; justify-content: flex-end; gap: 12px; }
 
-/* --- UPLOAD MODAL: locked controls while processing + minimize --- */
-.modal-header-actions { display: flex; align-items: center; gap: 4px; }
-/* The Start button is blue normally; greys out (and blocks clicks) while a
-   upload is in flight. ID-level so it beats the base .solid-btn-sm colour. */
+/* Start button: blue normally; greys out (and blocks clicks) when disabled --
+   e.g. before a file is chosen. ID-level so it beats the base .solid-btn-sm. */
 #start-upload-btn { background: #2b80ff; }
 #start-upload-btn:disabled { background: #94a3b8; cursor: not-allowed; }
-.outline-btn-sm:disabled, .icon-btn:disabled { opacity: 0.4; cursor: not-allowed; }
-.doc-type-select:disabled { background: #f1f5f9; color: #94a3b8; cursor: not-allowed; }
-.force-ocr-row.disabled { opacity: 0.55; cursor: not-allowed; }
-.force-ocr-row input:disabled { cursor: not-allowed; }
-
-/* Floating pill shown when the modal is minimized (processing continues). */
-.upload-min-chip {
-    position: fixed; bottom: 24px; right: 24px; z-index: 200;
-    display: flex; align-items: center; gap: 10px;
-    background: #152e51; color: #fff; border: none;
-    padding: 12px 18px; border-radius: 999px;
-    box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.35);
-    font-size: 13px; font-weight: 600; cursor: pointer;
-}
-.upload-min-chip:hover { background: #1e3c66; }
-.upload-min-chip.done { background: #10b981; }
-.upload-min-spinner {
-    width: 14px; height: 14px; flex-shrink: 0; border-radius: 50%;
-    border: 2px solid rgba(255, 255, 255, 0.4); border-top-color: #fff;
-    animation: upload-min-spin 0.8s linear infinite;
-}
-.upload-min-chip.done .upload-min-spinner { display: none; }
-@keyframes upload-min-spin { to { transform: rotate(360deg); } }
 
 /* --- ADVANCED MODAL STYLES --- */
 #queries-modal { justify-content: center; align-items: center; }

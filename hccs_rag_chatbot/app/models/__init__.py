@@ -14,6 +14,7 @@ from app.models.clustering_run import ClusteringRun
 
 # Layer 4 — depends on Document, ClusteringRun, UserAccount
 from app.models.document_chunk import DocumentChunk
+from app.models.document_retrieval import DocumentRetrieval
 from app.models.cluster import Cluster
 
 # Layer 5 — depends on Cluster
@@ -34,6 +35,7 @@ __all__ = [
     "Document",
     "ClusteringRun",
     "DocumentChunk",
+    "DocumentRetrieval",
     "Cluster",
     "ClusterKeyword",
     "QueryLog",

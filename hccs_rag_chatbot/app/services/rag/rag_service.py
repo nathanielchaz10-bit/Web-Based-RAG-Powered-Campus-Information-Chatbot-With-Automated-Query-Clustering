@@ -55,6 +55,26 @@ def _extract_sources(context_docs) -> list[str]:
     return sorted(sources)
 
 
+def _retrieved_document_ids(context_docs) -> list[int]:
+    """Distinct document_ids among the retrieved chunks.
+
+    Chunks indexed via the admin uploader carry their owning document_id in
+    metadata (see rag.indexer); the chat endpoint uses these to log a usage
+    event per document per answered query. Chunks without a document_id (e.g.
+    a from-scratch folder build) are simply skipped.
+    """
+    ids = set()
+    for doc in context_docs or []:
+        did = (getattr(doc, "metadata", {}) or {}).get("document_id")
+        if did is None:
+            continue
+        try:
+            ids.add(int(did))
+        except (TypeError, ValueError):
+            continue
+    return sorted(ids)
+
+
 def answer_query(question: str, chat_history: list[tuple[str, str]] | None = None) -> dict:
     """Answer one question.
 
@@ -83,6 +103,7 @@ def answer_query(question: str, chat_history: list[tuple[str, str]] | None = Non
     return {
         "answer": answer,
         "sources": _extract_sources(context_docs),
+        "retrieved_document_ids": _retrieved_document_ids(context_docs),
         "response_time_ms": response_time_ms,
         "num_context_docs": len(context_docs),
         "resolved_question": resolved_question,

@@ -20,6 +20,8 @@ from app.api.deps import get_current_user
 from app.core.database import get_db
 from app.models.chat_session import ChatSession
 from app.models.chat_response import ChatResponse
+from app.models.document import Document
+from app.models.document_retrieval import DocumentRetrieval
 from app.models.query_log import QueryLog
 from app.models.user_account import UserAccount
 from app.services.rag import rag_service
@@ -152,6 +154,26 @@ def chat(
 
     session.total_messages = (session.total_messages or 0) + 1
     session.last_activity = datetime.utcnow()
+
+    # Usage analytics: one retrieval event per document whose chunks helped
+    # answer this question (drives the Document Directory's "retrievals this
+    # month"). Best-effort -- it must never break the chat turn, and we only log
+    # ids that still exist so a stale id can't FK-abort the commit.
+    try:
+        retrieved_ids = result.get("retrieved_document_ids") or []
+        if retrieved_ids:
+            valid_ids = {
+                row[0]
+                for row in db.query(Document.document_id)
+                .filter(Document.document_id.in_(retrieved_ids))
+                .all()
+            }
+            now = datetime.utcnow()
+            for did in valid_ids:
+                db.add(DocumentRetrieval(document_id=did, retrieved_at=now))
+    except Exception:
+        pass
+
     db.commit()
 
     return ChatResponseOut(

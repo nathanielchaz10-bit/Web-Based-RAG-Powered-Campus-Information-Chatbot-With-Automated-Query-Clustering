@@ -70,6 +70,15 @@ class Document(Base):
         cascade="all, delete-orphan"
     )
 
+    # One Document → Many DocumentRetrievals (usage analytics: one event each
+    # time this doc's chunks were retrieved to answer a query). Cascades on
+    # delete so removing a document also clears its retrieval history.
+    retrievals = relationship(
+        "DocumentRetrieval",
+        back_populates="document",
+        cascade="all, delete-orphan"
+    )
+
     def __repr__(self):
         return (
             f"<Document id={self.document_id} "

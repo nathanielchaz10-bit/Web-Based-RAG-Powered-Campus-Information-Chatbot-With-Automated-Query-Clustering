@@ -15,8 +15,10 @@ This is the backend for the "upload documents" admin feature.
 """
 
 import os
+from datetime import datetime
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from app.api.deps import require_admin
@@ -24,6 +26,7 @@ from app.core.config import settings
 from app.core.database import get_db
 from app.models.document import Document
 from app.models.document_chunk import DocumentChunk
+from app.models.document_retrieval import DocumentRetrieval
 from app.models.user_account import UserAccount
 from app.services.ingestion import ingest_document
 from app.services.rag import indexer, rag_service
@@ -53,6 +56,17 @@ def _extension(filename: str) -> str:
 def _abs_path(file_path: str) -> str:
     """Absolute path for a stored 'uploads/<sub>/<name>' file_path."""
     return os.path.join(_UPLOADS_PARENT, file_path)
+
+
+def _month_window(now: datetime) -> tuple[datetime, datetime]:
+    """Return (this_month_start, last_month_start) as naive UTC datetimes,
+    for the Document Directory's 'retrievals this month' (and trend) metric."""
+    this_start = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+    if this_start.month == 1:
+        last_start = this_start.replace(year=this_start.year - 1, month=12)
+    else:
+        last_start = this_start.replace(month=this_start.month - 1)
+    return this_start, last_start
 
 
 def _index_and_record(db: Session, doc: Document, text: str) -> int:
@@ -202,6 +216,22 @@ def list_documents(
     user: UserAccount = Depends(require_admin),
 ):
     docs = db.query(Document).order_by(Document.created_at.desc()).all()
+
+    # Per-document retrieval counts for this month and last month (one grouped
+    # query each), used for the "N retrievals this month" activity + trend.
+    this_start, last_start = _month_window(datetime.utcnow())
+
+    def _counts(since, until=None) -> dict[int, int]:
+        q = db.query(
+            DocumentRetrieval.document_id, func.count().label("c")
+        ).filter(DocumentRetrieval.retrieved_at >= since)
+        if until is not None:
+            q = q.filter(DocumentRetrieval.retrieved_at < until)
+        return {row[0]: row[1] for row in q.group_by(DocumentRetrieval.document_id).all()}
+
+    this_month = _counts(this_start)
+    last_month = _counts(last_start, this_start)
+
     return [
         {
             "document_id": d.document_id,
@@ -212,6 +242,8 @@ def list_documents(
             "extraction_method": d.extraction_method,
             "extraction_confidence": d.extraction_confidence,
             "chunk_count": len(d.chunks),
+            "retrievals_this_month": this_month.get(d.document_id, 0),
+            "retrievals_last_month": last_month.get(d.document_id, 0),
             "uploaded_at": d.created_at.isoformat() if d.created_at else None,
         }
         for d in docs

@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Document Directory - HCCS Admin Portal</title>
-    <link rel="stylesheet" href="../css/admin.css?v=2">
+    <link rel="stylesheet" href="../css/admin.css?v=3">
 </head>
 <body>
     <div class="admin-layout">
@@ -109,10 +109,7 @@
         <div class="modal-content">
             <div class="modal-header">
                 <h3>Ingest New Knowledge</h3>
-                <div class="modal-header-actions">
-                    <button id="minimize-modal-btn" class="icon-btn hidden" title="Minimize — keep processing in the background"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="5" y1="12" x2="19" y2="12"></line></svg></button>
-                    <button id="close-modal-btn" class="icon-btn" title="Close"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg></button>
-                </div>
+                <button id="close-modal-btn" class="icon-btn" title="Close"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg></button>
             </div>
             <div class="modal-body">
                 <p class="modal-desc">Upload a PDF, DOCX, or TXT file. Word tables are preserved as structured text and scanned PDFs are read with vision OCR; the text is then chunked and indexed into the vector database.</p>
@@ -152,15 +149,8 @@
         </div>
     </div>
 
-    <!-- Floating pill shown when the upload modal is minimized; processing keeps
-         running in the background. Click to expand the modal again. -->
-    <button id="upload-min-chip" class="upload-min-chip hidden" title="Click to expand">
-        <span class="upload-min-spinner"></span>
-        <span id="upload-min-text">Processing upload…</span>
-    </button>
-
     <script src="../js/api.js"></script>
     <script src="../js/auth.js"></script>
-    <script src="../js/admin/documents.js?v=2"></script>
+    <script src="../js/admin/documents.js?v=3"></script>
 </body>
 </html>
