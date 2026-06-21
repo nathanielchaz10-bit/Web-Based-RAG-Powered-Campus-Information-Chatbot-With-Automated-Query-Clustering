@@ -7,7 +7,6 @@ from app.core.config import settings
 from app.services.rag.chunking import chunk_and_clean
 from app.services.rag.fusion import RagFusionChain
 
-from langchain_community.document_loaders import PyPDFLoader, Docx2txtLoader, TextLoader
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_google_genai import GoogleGenerativeAIEmbeddings, ChatGoogleGenerativeAI
 from langchain_chroma import Chroma
@@ -113,27 +112,47 @@ class HistoryAwareRagChain:
 
 
 def load_documents_from_folder(folder_path):
+    """Build LangChain Documents for every supported file under ``folder_path``.
+
+    Routes each file through the shared ingestion pipeline (``ingest_document``)
+    -- the SAME tiered extraction the admin uploader uses -- so a from-scratch
+    build gets per-page OCR for scanned pages, python-docx Markdown for native
+    Word tables, and embedded-image OCR, instead of the old plain-loader text
+    (PyPDFLoader/Docx2txtLoader, which did none of that). One Document per file,
+    tagged with its source path; chunk_and_clean splits them downstream exactly
+    as it does for an incremental upload, so both paths land chunks in the same
+    shape.
+    """
+    from langchain_core.documents import Document
+
+    from app.services.ingestion import ingest_document
+
     documents = []
     # Walk recursively so the per-type subfolders (docs/, pdf/, txt/) under the
     # uploads directory are all picked up regardless of which one a file lands in.
     for root, _dirs, files in os.walk(folder_path):
         for file in files:
+            if not file.lower().endswith((".pdf", ".docx", ".txt")):
+                continue
             file_path = os.path.join(root, file)
+            try:
+                result = ingest_document(file_path)
+            except Exception as exc:  # one bad file shouldn't abort the build
+                print(f"Skipped {file}: ingestion failed ({exc!r})")
+                continue
 
-            if file.endswith(".pdf"):
-                print(f"Loading PDF: {file}")
-                loader = PyPDFLoader(file_path)
-                documents.extend(loader.load())
+            text = (result.text or "").strip()
+            if not text:
+                print(f"Skipped {file}: no text extracted")
+                continue
 
-            elif file.endswith(".docx"):
-                print(f"Loading DOCX: {file}")
-                loader = Docx2txtLoader(file_path)
-                documents.extend(loader.load())
-
-            elif file.endswith(".txt"):
-                print(f"Loading TXT: {file}")
-                loader = TextLoader(file_path, encoding="utf-8")
-                documents.extend(loader.load())
+            print(
+                f"Loaded {file}: method={result.method}, "
+                f"confidence={result.confidence}, chars={result.chars}"
+            )
+            documents.append(
+                Document(page_content=text, metadata={"source": file_path})
+            )
 
     return documents
 
