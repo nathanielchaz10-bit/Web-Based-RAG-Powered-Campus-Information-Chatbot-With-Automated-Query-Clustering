@@ -34,6 +34,15 @@ class Document(Base):
     is_active = Column(Boolean, default=False, nullable=False)
     version = Column(String(50), default="1.0", nullable=False)
 
+    # --- Ingestion verdict (app/services/ingestion) ---
+    # How the text was recovered: "text_layer" | "ocr:gemini" | "ocr:tesseract".
+    extraction_method = Column(String(50), nullable=True)
+    # "high" | "medium" | "low" -- drives whether the doc auto-indexes or is held.
+    extraction_confidence = Column(String(20), nullable=True)
+    # True when extraction was too weak to trust; the doc is saved but NOT
+    # indexed until an admin reviews and approves it (human-in-the-loop).
+    needs_review = Column(Boolean, default=False, nullable=False)
+
     # total_token: populated after preprocessing completes
     total_token = Column(Integer, nullable=True)
 

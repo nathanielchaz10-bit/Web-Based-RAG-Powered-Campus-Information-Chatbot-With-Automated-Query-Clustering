@@ -32,6 +32,17 @@ def is_ready() -> bool:
     return _rag_chain is not None
 
 
+def reset_chain() -> None:
+    """Drop the cached chain so the next query rebuilds it from disk.
+
+    Called after the corpus changes (a document is indexed or removed) so the
+    chat path reloads the Chroma collection and sees the new/removed chunks
+    without a process restart.
+    """
+    global _rag_chain
+    _rag_chain = None
+
+
 def _extract_sources(context_docs) -> list[str]:
     """Turn retrieved chunk metadata into a clean, de-duplicated source list."""
     sources = set()

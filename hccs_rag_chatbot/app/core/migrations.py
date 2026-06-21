@@ -43,10 +43,27 @@ def _add_resolved_query_text(conn: Connection) -> bool:
     return True
 
 
+def _add_document_extraction_fields(conn: Connection) -> bool:
+    """documents.extraction_method / extraction_confidence / needs_review:
+    the ingestion verdict recorded for each uploaded document."""
+    changed = False
+    columns = [
+        ("extraction_method", "ALTER TABLE documents ADD COLUMN extraction_method VARCHAR(50)"),
+        ("extraction_confidence", "ALTER TABLE documents ADD COLUMN extraction_confidence VARCHAR(20)"),
+        ("needs_review", "ALTER TABLE documents ADD COLUMN needs_review BOOLEAN NOT NULL DEFAULT 0"),
+    ]
+    for name, ddl in columns:
+        if not _has_column(conn, "documents", name):
+            conn.exec_driver_sql(ddl)
+            changed = True
+    return changed
+
+
 # Ordered list of (description, migration_fn). Append new ones; never mutate
 # or remove existing entries.
 _MIGRATIONS = [
     ("add query_logs.resolved_query_text", _add_resolved_query_text),
+    ("add documents extraction fields", _add_document_extraction_fields),
 ]
 
 

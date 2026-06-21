@@ -4,6 +4,7 @@ import time
 from dotenv import load_dotenv
 
 from app.core.config import settings
+from app.services.rag.chunking import chunk_and_clean
 from app.services.rag.fusion import RagFusionChain
 
 from langchain_community.document_loaders import PyPDFLoader, Docx2txtLoader, TextLoader
@@ -180,27 +181,9 @@ def run_rag_pipeline():
             print("Error 404: Please put a PDF, DOCX or TXT file in the 'uploads' folder.")
             return
 
-        # 2. chunk the documents
-        text_splitter = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=200)
-        splits = text_splitter.split_documents(docs)
-        
-        # 3. filterng the chunks to remove garbage formatting
-        # skipped to since lilinisin din natin mismong docs, JIC lang to
-        
-        cleaned_splits = []
-        for split in splits:
-            # removing hidden Word doc formatting codes and null characters
-            clean_text = split.page_content.replace('\x00', '').replace('\xa0', ' ')
-            
-            # collapse spacing and empty line breaks into a single space
-            clean_text = re.sub(r'\s+', ' ', clean_text).strip()
-            
-            # if chunk has less than 15 valid characters, its garbage formatting.
-            if len(clean_text) > 15:
-                split.page_content = clean_text
-                cleaned_splits.append(split)
-                
-        splits = cleaned_splits
+        # 2. chunk + clean (shared with the incremental indexer so an uploaded
+        #    document is chunked identically to a from-scratch rebuild)
+        splits = chunk_and_clean(docs)
 
         print()
         print(f"Total chunks to process for ChromaDB: {len(splits)}")
