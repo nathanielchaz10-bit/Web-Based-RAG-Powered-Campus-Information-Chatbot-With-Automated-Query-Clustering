@@ -3,6 +3,7 @@
 
 # Virtual Environments
 venv/
+.venv/
 env/
 
 # Python Cache

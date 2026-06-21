@@ -35,6 +35,7 @@ Then open **http://localhost:8000/** (it redirects to the login page).
 | Clustering (run) | `POST /clusters/run` (admin) | Runs the ML clustering pipeline in `app/services/clustering` (`pipeline.py`): Gemini embeddings → Agglomerative clustering → LLM labeling. Writes `ClusteringRun` + `Cluster` + `ClusterKeyword`, back-fills `QueryLog.cluster_id`. Also runs daily via `scheduler.py`. |
 | Clustering (read) | `GET /clusters` | Returns clusters of the latest completed run for the admin page. |
 | Dashboard | `GET /dashboard/{metrics,query-volume,system-health,recent-inquiries}` (admin) | Computed live from the DB. |
+| Documents | `POST /documents/upload`, `GET /documents`, `POST /documents/{id}/approve`, `DELETE /documents/{id}` (admin) | Upload → tiered ingestion (`app/services/ingestion`: native text layer, Gemini-vision OCR for scanned PDFs) → incremental indexing into Chroma (`app/services/rag/indexer.py`). Confident extractions go live immediately; low-confidence or failed-indexing uploads are saved and held for review (retry via Approve). Writes `Document` + `DocumentChunk`. |
 | Auth | `/api/auth/{login,callback,me,logout,dev-login}` | Google path fixed (was importing a non-existent module) + dev-login bypass. |
 
 Frontend wired: `student/chat.js`, `admin/clusters.js`, and the login page
@@ -61,10 +62,6 @@ now has `api.js`/`auth.js` loaded (they were missing).
 
 ## Not yet integrated (next steps)
 
-- **Document upload → RAG ingestion.** RAG currently builds its ChromaDB index
-  from the repo-root `docs/` folder (your original pipeline). The admin
-  "Document Directory" page + `documents`/`document_chunks` tables are not yet
-  connected to the vector store.
 - **NLP enrichment.** `QueryLog.sentiment` / `detected_intent` are not populated
   yet, so the dashboard shows "Neutral"/"General" placeholders.
 - **Real Google OAuth.** The flow is fixed and ready, but needs real

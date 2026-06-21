@@ -598,11 +598,13 @@ body {
 .drop-zone .file-limits { font-size: 11px; color: #94a3b8; }
 
 .pipeline-tracker { margin-top: 20px; background: #f8fafc; border-radius: 8px; padding: 16px; border: 1px solid #e2e8f0; }
-.pipeline-tracker .step { font-size: 13px; font-weight: 500; margin-bottom: 12px; display: flex; align-items: center; gap: 8px;}
+.pipeline-tracker .step { font-size: 13px; font-weight: 500; margin-bottom: 12px; display: flex; align-items: center; flex-wrap: wrap; gap: 8px;}
 .pipeline-tracker .step:last-child { margin-bottom: 0; }
 .step.pending { color: #94a3b8; }
 .step.active { color: #2563eb; font-weight: 600; }
 .step.done { color: #10b981; }
+/* Muted, full-width detail line under a step (e.g. the raw indexing-error cause). */
+.step-detail { flex-basis: 100%; margin-top: 4px; font-size: 11px; font-weight: 400; color: #94a3b8; line-height: 1.4; word-break: break-word; }
 
 .modal-footer { padding: 16px 24px; border-top: 1px solid #e2e8f0; background: #f8fafc; display: flex; justify-content: flex-end; gap: 12px; }
 

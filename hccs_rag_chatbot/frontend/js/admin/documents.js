@@ -219,7 +219,15 @@ document.addEventListener("DOMContentLoaded", () => {
             if (res.indexed) {
                 setStep(stepEmbed, "done", `3. Indexed ${res.chunk_count} chunks (${escapeHtml(res.confidence)} confidence) ✓`);
             } else {
-                setStep(stepEmbed, "active", `3. Held for review — low extraction confidence ⚠`);
+                // Held: show the backend's actual reason (low confidence vs. an
+                // indexing error such as a missing API key / exhausted quota),
+                // plus the raw cause as a muted detail when present.
+                const reason = res.message || "Held for review.";
+                const detail = res.index_error
+                    ? `<div class="step-detail">${escapeHtml(res.index_error)}</div>`
+                    : "";
+                setStep(stepEmbed, "active", `3. ⚠ ${escapeHtml(reason)}${detail}`);
+                if (res.index_error) console.warn("[upload] indexing error:", res.index_error);
             }
             await loadDocuments();
         } catch (err) {

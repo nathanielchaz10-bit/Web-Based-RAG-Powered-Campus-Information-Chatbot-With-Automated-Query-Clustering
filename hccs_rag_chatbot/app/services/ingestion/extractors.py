@@ -15,7 +15,7 @@ def file_extension(path: str) -> str:
 def extract_text_layer(path: str) -> tuple[str, int]:
     """Return (text, page_count) from the file's native text layer.
 
-    - pdf  -> PyMuPDF (fitz): reads the embedded text layer (empty for scans).
+    - pdf  -> pypdfium2 (PDFium): reads the embedded text layer (empty for scans).
     - docx -> docx2txt.
     - txt/md -> read as UTF-8.
 

@@ -8,8 +8,9 @@ Two engines, same signature ``ocr_pdf(path, dpi) -> str``:
     asks it to transcribe. Much better on tables/layout and can emit markdown
     tables, at the cost of an API call per page (ingestion-time only).
 
-Pages are rendered with PyMuPDF (no poppler/system renderer needed). All heavy
-imports are lazy so this module imports cleanly without the optional deps.
+Pages are rendered with pypdfium2 (PDFium) -- no poppler/system renderer
+needed. All heavy imports are lazy so this module imports cleanly without the
+optional deps.
 """
 
 from typing import Callable, Iterator

@@ -132,13 +132,44 @@ def upload_document(
     db.add(doc)
     db.flush()  # assign document_id
 
+    # Decide what to do with the extracted text:
+    #   - low extraction confidence -> hold for human review (don't index).
+    #   - confident extraction -> index now; but if indexing can't complete
+    #     (missing/invalid API key, exhausted quota, a transient Google error,
+    #     or every chunk getting filtered) HOLD the document instead of failing
+    #     the whole upload. The file and its extracted text are already saved, so
+    #     holding lets the admin retry with "Approve" once the cause is fixed --
+    #     far better than a 500 that loses the work and explains nothing.
     indexed = False
     chunk_count = 0
-    # Confident extraction -> index now. Low-confidence -> hold for admin review.
+    index_error = None
+    message = "Saved but held for review (low extraction confidence)."
+
     if not result.needs_review:
-        chunk_count = _index_and_record(db, doc, result.text)
-        doc.is_active = True
-        indexed = True
+        try:
+            chunk_count = _index_and_record(db, doc, result.text)
+        except Exception as exc:  # embedding/vector-store failure, not a DB error
+            index_error = str(exc)
+            chunk_count = 0
+
+        if chunk_count > 0:
+            doc.is_active = True
+            doc.needs_review = False
+            indexed = True
+            message = "Indexed and live."
+        else:
+            # Extraction was fine but nothing made it into the index; hold it so
+            # the upload isn't silently "active" with zero searchable chunks. The
+            # concise reason goes in `message`; the raw cause stays in
+            # `index_error` for the admin/logs.
+            doc.needs_review = True
+            message = (
+                "Saved, but indexing did not complete; held for review — "
+                "fix the cause and retry with Approve."
+                if index_error
+                else "Saved, but no chunks could be indexed; "
+                "held for review — retry with Approve."
+            )
 
     db.commit()
 
@@ -153,14 +184,11 @@ def upload_document(
         "chars": result.chars,
         "extraction_method": result.method,
         "confidence": result.confidence,
-        "needs_review": result.needs_review,
+        "needs_review": doc.needs_review,
         "indexed": indexed,
         "chunk_count": chunk_count,
-        "message": (
-            "Indexed and live."
-            if indexed
-            else "Saved but held for review (low extraction confidence)."
-        ),
+        "index_error": index_error,
+        "message": message,
     }
 
 
@@ -212,7 +240,19 @@ def approve_document(
     except Exception as exc:
         raise HTTPException(status_code=502, detail=f"Re-extraction failed: {exc}")
 
-    chunk_count = _index_and_record(db, doc, result.text)
+    # Index it. If indexing can't complete (API key/quota/transient error) or
+    # produces no chunks, leave the document held -- never flip it to active
+    # without searchable chunks -- and tell the admin why so they can retry.
+    try:
+        chunk_count = _index_and_record(db, doc, result.text)
+    except Exception as exc:
+        raise HTTPException(status_code=502, detail=f"Indexing failed: {exc}")
+    if chunk_count == 0:
+        raise HTTPException(
+            status_code=502,
+            detail="Indexing produced no chunks; document left held for review.",
+        )
+
     doc.needs_review = False
     doc.is_active = True
     db.commit()
