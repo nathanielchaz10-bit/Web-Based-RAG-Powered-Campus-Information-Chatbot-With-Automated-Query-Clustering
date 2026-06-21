@@ -155,16 +155,49 @@ document.addEventListener("DOMContentLoaded", async () => {
         scrollToBottom();
     }
 
+    function cleanSourceName(name) {
+        return String(name)
+            .replace(/\s*\((orig|original)\)\s*$/i, "") // drop trailing "(Orig)" tags
+            .replace(/\.(pdf|docx?|txt|md)$/i, "")        // drop file extensions
+            .replace(/[_-]+/g, " ")                        // underscores/dashes -> spaces
+            .replace(/\s+/g, " ")                          // collapse whitespace
+            .trim();
+    }
+
     function addSources(sources) {
         if (!sources || !sources.length) return;
+
+        // De-duplicate after cleaning so the same doc isn't listed twice
+        const seen = new Set();
+        const cleaned = sources
+            .map(cleanSourceName)
+            .filter(name => name && !seen.has(name.toLowerCase()) && seen.add(name.toLowerCase()));
 
         const row = document.createElement("div");
         row.className = "chat-row source-row"; // Deliberately NOT .chat-row-bot
 
         const wrap = document.createElement("div");
         wrap.className = "chat-msg-content chat-source";
-        wrap.textContent = "Source: " + sources.join(", ");
 
+        const label = document.createElement("span");
+        label.className = "source-label";
+        label.textContent = cleaned.length > 1 ? "Sources" : "Source";
+        wrap.appendChild(label);
+
+        const list = document.createElement("div");
+        list.className = "source-pills";
+
+        const docIcon = '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline></svg>';
+
+        cleaned.forEach(name => {
+            const pill = document.createElement("span");
+            pill.className = "source-pill";
+            pill.title = name;
+            pill.innerHTML = docIcon + "<span>" + name.replace(/</g, "&lt;") + "</span>";
+            list.appendChild(pill);
+        });
+
+        wrap.appendChild(list);
         row.appendChild(wrap);
         chatHistory.appendChild(row);
         scrollToBottom();
