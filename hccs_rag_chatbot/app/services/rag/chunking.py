@@ -18,9 +18,22 @@ _MIN_CHUNK_CHARS = 15
 
 def clean_chunk_text(text: str) -> str:
     """Strip hidden Word/OCR artifacts (null bytes, non-breaking spaces) and
-    collapse all runs of whitespace to single spaces."""
+    normalize whitespace WITHOUT destroying line structure.
+
+    Horizontal whitespace (spaces/tabs) is collapsed to a single space, but
+    newlines are preserved so structured content survives chunking: a Markdown
+    table stays one row per line and the OCR cleanup's "CODE — value" lines stay
+    one per line, which an LLM reads far better than a single mashed-together
+    line. Runs of blank lines are capped at one. (Splitting happens before this
+    in chunk_and_clean, so this is purely a content tidy-up -- it doesn't move
+    chunk boundaries.)
+    """
     text = (text or "").replace("\x00", "").replace("\xa0", " ")
-    return re.sub(r"\s+", " ", text).strip()
+    text = text.replace("\r\n", "\n").replace("\r", "\n")  # normalize line endings
+    text = re.sub(r"[^\S\n]+", " ", text)   # collapse spaces/tabs, keep newlines
+    text = re.sub(r" *\n *", "\n", text)     # trim spaces hugging newlines
+    text = re.sub(r"\n{3,}", "\n\n", text)   # cap blank-line runs at one
+    return text.strip()
 
 
 def chunk_and_clean(documents, min_chars: int = _MIN_CHUNK_CHARS):
