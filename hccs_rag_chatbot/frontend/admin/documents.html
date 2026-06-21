@@ -109,7 +109,10 @@
         <div class="modal-content">
             <div class="modal-header">
                 <h3>Ingest New Knowledge</h3>
-                <button id="close-modal-btn" class="icon-btn"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg></button>
+                <div class="modal-header-actions">
+                    <button id="minimize-modal-btn" class="icon-btn hidden" title="Minimize — keep processing in the background"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="5" y1="12" x2="19" y2="12"></line></svg></button>
+                    <button id="close-modal-btn" class="icon-btn" title="Close"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg></button>
+                </div>
             </div>
             <div class="modal-body">
                 <p class="modal-desc">Upload a PDF, DOCX, or TXT file. Word tables are preserved as structured text and scanned PDFs are read with vision OCR; the text is then chunked and indexed into the vector database.</p>
@@ -144,10 +147,17 @@
             </div>
             <div class="modal-footer">
                 <button class="outline-btn-sm" id="cancel-upload">Cancel</button>
-                <button class="solid-btn-sm" id="start-upload-btn" style="background-color: #2b80ff;" disabled>Start Processing</button>
+                <button class="solid-btn-sm" id="start-upload-btn" disabled>Start Processing</button>
             </div>
         </div>
     </div>
+
+    <!-- Floating pill shown when the upload modal is minimized; processing keeps
+         running in the background. Click to expand the modal again. -->
+    <button id="upload-min-chip" class="upload-min-chip hidden" title="Click to expand">
+        <span class="upload-min-spinner"></span>
+        <span id="upload-min-text">Processing upload…</span>
+    </button>
 
     <script src="../js/api.js"></script>
     <script src="../js/auth.js"></script>

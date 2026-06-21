@@ -19,8 +19,32 @@ document.addEventListener("DOMContentLoaded", () => {
     const stepChunk = document.getElementById("step-chunk");
     const stepEmbed = document.getElementById("step-embed");
 
+    const minimizeBtn = document.getElementById("minimize-modal-btn");
+    const minChip = document.getElementById("upload-min-chip");
+    const minChipText = document.getElementById("upload-min-text");
+    const forceOcrRow = forceOcrCheck ? forceOcrCheck.closest(".force-ocr-row") : null;
+
     let selectedFile = null;
     let uploadDone = false;
+
+    // While an upload is in flight we lock the choices (type + Force OCR) so they
+    // can't change mid-process, and lock the dismiss buttons (Cancel/×) so the
+    // run can't be abandoned -- Minimize is offered instead. Both are released
+    // when the modal is reset for the next upload.
+    function lockChoices(on) {
+        docTypeSelect.disabled = on;
+        if (forceOcrCheck) forceOcrCheck.disabled = on;
+        if (forceOcrRow) forceOcrRow.classList.toggle("disabled", on);
+    }
+    function lockDismiss(on) {
+        cancelBtn.disabled = on;
+        closeBtn.disabled = on;
+        minimizeBtn.classList.toggle("hidden", !on);  // show Minimize only while locked
+    }
+    function setMinimized(on) {
+        modal.classList.toggle("hidden", on);          // hide dialog; processing continues
+        minChip.classList.toggle("hidden", !on);
+    }
 
     const FILE_ICON = `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#1e293b" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline></svg>`;
     const DOTS_ICON = `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="1"></circle><circle cx="12" cy="5" r="1"></circle><circle cx="12" cy="19" r="1"></circle></svg>`;
@@ -165,12 +189,22 @@ document.addEventListener("DOMContentLoaded", () => {
         if (forceOcrCheck) forceOcrCheck.checked = false;
         startBtn.disabled = true;
         startBtn.textContent = "Start Processing";
+        // Release any locks/minimize state left over from a previous upload.
+        lockChoices(false);
+        lockDismiss(false);
+        minChip.classList.add("hidden");
+        minChip.classList.remove("done");
     }
-    function closeModal() { modal.classList.add("hidden"); }
+    function closeModal() {
+        modal.classList.add("hidden");
+        minChip.classList.add("hidden");
+    }
 
     openBtn.addEventListener("click", openModal);
     closeBtn.addEventListener("click", closeModal);
     cancelBtn.addEventListener("click", closeModal);
+    minimizeBtn.addEventListener("click", () => setMinimized(true));
+    minChip.addEventListener("click", () => setMinimized(false));
 
     dropZone.addEventListener("click", () => fileInput.click());
     dropZone.addEventListener("dragover", (e) => { e.preventDefault(); dropZone.classList.add("dragover"); });
@@ -203,6 +237,10 @@ document.addEventListener("DOMContentLoaded", () => {
         if (!selectedFile) return;
 
         startBtn.disabled = true;
+        lockChoices(true);   // freeze type + Force OCR for this run
+        lockDismiss(true);   // no Cancel/× mid-process; offer Minimize instead
+        minChip.classList.remove("done");
+        if (minChipText) minChipText.textContent = "Processing upload…";
         dropZone.style.display = "none";
         pipeline.classList.remove("hidden");
         setStep(stepExtract, "active", "Uploading &amp; extracting text…");
@@ -241,6 +279,9 @@ document.addEventListener("DOMContentLoaded", () => {
             uploadDone = true;
             startBtn.textContent = "Done";
             startBtn.disabled = false;
+            lockDismiss(false);            // allow closing now; hide Minimize
+            minChip.classList.add("done");
+            if (minChipText) minChipText.textContent = "Upload finished — tap to view";
         }
     });
 
