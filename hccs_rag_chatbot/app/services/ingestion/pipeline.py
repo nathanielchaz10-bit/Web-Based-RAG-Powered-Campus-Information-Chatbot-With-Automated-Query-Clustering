@@ -4,7 +4,8 @@ One entry point, ``ingest_document``, that turns any supported file into clean
 retrievable text plus a confidence verdict, choosing the cheapest method that
 works:
 
-    1. native text layer (instant, free)        -> digital PDFs/docx/txt
+    1. native text layer (instant, free)        -> digital PDFs/docx/txt; for
+       docx, native Word tables are rendered as Markdown (structure preserved)
     2. OCR, applied PER PAGE                      -> recovers scanned/image-heavy
        pages even inside an otherwise-digital PDF; for docx, OCRs the pictures
        embedded in the file (text trapped in diagrams/screenshots)
@@ -13,7 +14,9 @@ works:
 ``force_ocr`` overrides the per-page heuristic and OCRs everything with a
 color/layout-aware prompt -- for docs whose meaning lives in layout + color
 coding (a calendar's vector cell-shading) that the text layer simply can't carry
-and the image-coverage heuristic can't see.
+and the image-coverage heuristic can't see. For a docx this renders the file to
+PDF first (LibreOffice) so its pages can be OCR'd like any PDF; without
+LibreOffice it falls back to the text layer + embedded-image OCR.
 
 It also reports how it got the text and whether the result is trustworthy
 (``confidence`` / ``needs_review``), which is what an admin upload flow needs to
@@ -99,11 +102,31 @@ def _ingest_pdf(path, *, force_ocr, ocr_backend, text_min_cpp, cov_threshold):
     return text, method, pages, ocr_used
 
 
-def _ingest_docx(path, *, force_ocr, ocr_backend, docx_min_pixels):
-    """docx ingestion: native text layer + OCR of embedded images.
+def _ingest_docx(path, *, force_ocr, ocr_backend, text_min_cpp, cov_threshold,
+                 docx_min_pixels):
+    """docx ingestion. Returns (text, method, pages, ocr_used).
 
-    Returns (text, method, pages, ocr_used)."""
-    raw, _ = extractors.extract_text_layer(path)  # docx2txt
+    Normal path: native text layer (python-docx -- native Word tables become
+    Markdown) plus OCR of any images embedded in the file. Force-OCR path:
+    render the docx to PDF (LibreOffice) and OCR every page with the layout/
+    color-aware prompt -- the only way to carry a native table's grid or color
+    coding -- then fall back to the text + embedded-image path if LibreOffice
+    isn't installed."""
+    if force_ocr:
+        import tempfile
+
+        with tempfile.TemporaryDirectory(prefix="docx_ocr_") as tmp:
+            pdf_path = extractors.docx_to_pdf(path, out_dir=tmp)
+            if pdf_path:
+                # Reuse the PDF path: force_ocr renders + OCRs every page. The
+                # temp PDF is read fully before this returns, so cleanup is safe.
+                return _ingest_pdf(
+                    pdf_path, force_ocr=True, ocr_backend=ocr_backend,
+                    text_min_cpp=text_min_cpp, cov_threshold=cov_threshold,
+                )
+        # LibreOffice unavailable -> fall through to text + embedded-image OCR.
+
+    raw, _ = extractors.extract_text_layer(path)  # python-docx (tables -> MD)
     text = (raw or "").strip()
 
     # Force lowers the size filter so even small figures are read.
@@ -166,6 +189,7 @@ def ingest_document(
     elif ext == "docx":
         text, method, pages, ocr_used = _ingest_docx(
             path, force_ocr=force_ocr, ocr_backend=ocr_backend,
+            text_min_cpp=text_min_cpp, cov_threshold=cov_threshold,
             docx_min_pixels=docx_min_px,
         )
     else:

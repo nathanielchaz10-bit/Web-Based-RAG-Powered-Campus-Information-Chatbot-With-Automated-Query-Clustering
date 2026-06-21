@@ -9,7 +9,8 @@ extraction/OCR so it needs no Tesseract binary, no API key, and no real files.
 Covers the per-page OCR routing: a digital PDF skips OCR, a scanned PDF is
 OCR'd, a PDF with only SOME scanned pages is "hybrid", Force-OCR overrides the
 heuristic (and uses the color-aware prompt), and a docx OCRs its embedded
-images.
+images. Also covers docx Force-OCR rendering to PDF (with a LibreOffice-missing
+fallback) and native Word tables rendering to Markdown.
 """
 
 import os
@@ -115,12 +116,6 @@ def test_docx():
     assert r.method == "hybrid:gemini" and r.ocr_used is True, r.summary()
     assert "Plain docx prose." in r.text and "TEXT FROM DIAGRAM" in r.text
 
-    # Force lowers the image-size filter (min_pixels=0) and flags color-aware.
-    captured = {}
-    extractors.extract_docx_images = lambda path, min_pixels=0: captured.update(min_pixels=min_pixels) or ["IMG"]
-    pipeline.ingest_document("notes.docx", force_ocr=True)
-    assert captured["min_pixels"] == 0 and rec["color_aware"] is True, (captured, rec)
-
     # docx with no images -> plain text_layer, no OCR.
     extractors.extract_docx_images = lambda path, min_pixels=0: []
     r = pipeline.ingest_document("plain.docx")
@@ -128,8 +123,73 @@ def test_docx():
     print("test_docx: PASS")
 
 
+def test_docx_force_ocr():
+    # Force-OCR + LibreOffice available -> render the docx to PDF and OCR every
+    # page with the color-aware prompt (delegates to the PDF path).
+    extractors.docx_to_pdf = lambda path, out_dir=None: "/tmp/rendered.pdf"
+    rec = _patch_pdf(["A" * 2000], [0.0], "word " * 200)
+    r = pipeline.ingest_document("calendar.docx", force_ocr=True)
+    assert r.method == "ocr:gemini" and r.ocr_used is True, r.summary()
+    assert rec["color_aware"] is True and rec["ocr_pages"] == [0], rec
+
+    # Force-OCR + LibreOffice missing -> fall back to text + embedded-image OCR,
+    # with the size filter dropped (min_pixels=0) and color-aware on.
+    extractors.docx_to_pdf = lambda path, out_dir=None: None
+    extractors.extract_text_layer = lambda path: ("Prose.", 1)
+    captured = {}
+    extractors.extract_docx_images = (
+        lambda path, min_pixels=0: captured.update(min_pixels=min_pixels) or ["IMG"]
+    )
+    irec = {}
+
+    def img_backend(name):
+        def run(images, color_aware=False):
+            irec["color_aware"] = color_aware
+            return ["FORCED IMG TEXT"]
+        return run
+
+    ocr_mod.get_image_ocr_backend = img_backend
+    r = pipeline.ingest_document("nolibre.docx", force_ocr=True)
+    assert captured["min_pixels"] == 0 and irec["color_aware"] is True, (captured, irec)
+    assert r.method == "hybrid:gemini" and "FORCED IMG TEXT" in r.text, r.summary()
+    print("test_docx_force_ocr: PASS")
+
+
+def test_docx_table_markdown():
+    # A native Word table -> GitHub Markdown (header + separator + rows), pipes
+    # escaped, short rows padded to the widest row's column count.
+    class _Cell:
+        def __init__(self, t):
+            self.text = t
+
+    class _Row:
+        def __init__(self, *vals):
+            self.cells = [_Cell(v) for v in vals]
+
+    class _Table:
+        def __init__(self, rows):
+            self.rows = rows
+
+    table = _Table([
+        _Row("Fee", "Amount", "Due"),
+        _Row("Tuition", "$500 | term", "Aug 1"),
+        _Row("Lab"),  # short row -> padded to 3 columns
+    ])
+    md = extractors._table_to_markdown(table)
+    lines = md.splitlines()
+    assert lines[0] == "| Fee | Amount | Due |", md
+    assert lines[1] == "| --- | --- | --- |", md
+    # In-cell pipe escaped (\|) so the cell stays one column, not split into two.
+    assert lines[2] == "| Tuition | $500 \\| term | Aug 1 |", md
+    assert lines[3].startswith("| Lab |") and lines[3].count("|") == 4, md
+    assert extractors._table_to_markdown(_Table([])) == ""
+    print("test_docx_table_markdown: PASS")
+
+
 if __name__ == "__main__":
     test_quality()
     test_pdf_routing()
     test_docx()
+    test_docx_force_ocr()
+    test_docx_table_markdown()
     print("\nAll ingestion tests passed.")

@@ -111,11 +111,117 @@ def extract_docx_images(path: str, *, min_pixels: int = 0) -> list:
     return images
 
 
+def _md_escape_cell(text: str) -> str:
+    """Make cell text safe for a one-line GitHub Markdown table cell.
+
+    A Markdown cell can't span lines and uses ``|`` as the column separator, so
+    collapse internal whitespace/newlines to single spaces and escape any pipes.
+    """
+    return " ".join((text or "").split()).replace("|", "\\|")
+
+
+def _table_to_markdown(table) -> str:
+    """Render a python-docx ``Table`` as a GitHub Markdown table.
+
+    Duck-typed: ``table`` only needs ``.rows`` -> objects with ``.cells`` ->
+    objects with ``.text`` (so the formatting is unit-testable without
+    python-docx). The first row becomes the header. Rows are padded to the widest
+    row's column count; merged cells repeat their text across the spanned columns,
+    which keeps columns aligned. Returns "" for an empty table.
+    """
+    grid = [[_md_escape_cell(c.text) for c in row.cells] for row in table.rows]
+    ncols = max((len(r) for r in grid), default=0)
+    if ncols == 0:
+        return ""
+    grid = [r + [""] * (ncols - len(r)) for r in grid]
+    header, *body = grid
+    lines = [
+        "| " + " | ".join(header) + " |",
+        "| " + " | ".join(["---"] * ncols) + " |",
+    ]
+    lines += ["| " + " | ".join(r) + " |" for r in body]
+    return "\n".join(lines)
+
+
+def extract_docx_text(path: str) -> str:
+    """Return a .docx's text with native Word tables rendered as Markdown.
+
+    Walks the document body in order with python-docx so paragraphs and tables
+    stay interleaved, turning each ``<w:tbl>`` into a GitHub Markdown table. This
+    preserves the row/column structure that the old docx2txt path flattened into
+    orderless cell text (a fee table's value lost its column). Falls back to
+    docx2txt if python-docx is missing or the file can't be parsed that way --
+    text is still preserved even when structure isn't.
+    """
+    try:
+        import docx
+        from docx.oxml.table import CT_Tbl
+        from docx.oxml.text.paragraph import CT_P
+        from docx.table import Table
+        from docx.text.paragraph import Paragraph
+
+        document = docx.Document(path)
+        blocks: list[str] = []
+        for child in document.element.body.iterchildren():
+            if isinstance(child, CT_P):
+                line = Paragraph(child, document).text.strip()
+                if line:
+                    blocks.append(line)
+            elif isinstance(child, CT_Tbl):
+                md = _table_to_markdown(Table(child, document))
+                if md:
+                    blocks.append(md)
+        return "\n\n".join(blocks)
+    except Exception:
+        import docx2txt
+
+        return docx2txt.process(path) or ""
+
+
+def docx_to_pdf(path: str, out_dir: str | None = None) -> str | None:
+    """Convert a .docx to PDF via headless LibreOffice; return the PDF path, or
+    None if LibreOffice isn't installed or the conversion fails.
+
+    This is what lets Force-OCR treat a docx like a PDF -- render its pages to
+    images and vision-OCR them -- so a native Word table's grid or a color-coded
+    layout (which neither python-docx text nor embedded-image OCR can carry) is
+    captured. LibreOffice is a system dependency that pip can't provide
+    (apt-get install libreoffice / brew install --cask libreoffice). A private,
+    per-call user profile keeps concurrent uploads from clashing on the soffice
+    lock.
+    """
+    import os
+    import shutil
+    import subprocess
+    import tempfile
+
+    soffice = shutil.which("soffice") or shutil.which("libreoffice")
+    if not soffice:
+        return None
+    out_dir = out_dir or tempfile.mkdtemp(prefix="docx2pdf_")
+    profile = os.path.join(out_dir, "lo_profile")
+    try:
+        subprocess.run(
+            [
+                soffice,
+                f"-env:UserInstallation=file://{profile}",
+                "--headless", "--convert-to", "pdf", "--outdir", out_dir, path,
+            ],
+            check=True, capture_output=True, timeout=180,
+        )
+    except (subprocess.SubprocessError, OSError):
+        return None
+    pdf = os.path.join(
+        out_dir, os.path.splitext(os.path.basename(path))[0] + ".pdf"
+    )
+    return pdf if os.path.exists(pdf) else None
+
+
 def extract_text_layer(path: str) -> tuple[str, int]:
     """Return (text, page_count) from the file's native text layer.
 
     - pdf  -> pypdfium2 (PDFium): reads the embedded text layer (empty for scans).
-    - docx -> docx2txt.
+    - docx -> python-docx (native Word tables become Markdown; docx2txt fallback).
     - txt/md -> read as UTF-8.
 
     page_count is 1 for non-paged formats. Raises ValueError for unsupported
@@ -128,9 +234,7 @@ def extract_text_layer(path: str) -> tuple[str, int]:
         return "\n".join(pages), len(pages)
 
     if ext == "docx":
-        import docx2txt
-
-        return (docx2txt.process(path) or ""), 1
+        return extract_docx_text(path), 1
 
     if ext in ("txt", "md"):
         with open(path, encoding="utf-8", errors="ignore") as fh:
