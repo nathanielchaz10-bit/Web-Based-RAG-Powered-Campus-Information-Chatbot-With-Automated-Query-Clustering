@@ -1,6 +1,7 @@
+// Document Directory — wired to the real /documents API (api.js helpers).
 document.addEventListener("DOMContentLoaded", () => {
 
-    // --- 1. MODAL LOGIC ---
+    // --- Elements ---
     const modal = document.getElementById("upload-modal");
     const openBtn = document.getElementById("open-upload-btn");
     const closeBtn = document.getElementById("close-modal-btn");
@@ -10,15 +11,159 @@ document.addEventListener("DOMContentLoaded", () => {
     const fileInput = document.getElementById("file-input");
     const startBtn = document.getElementById("start-upload-btn");
     const pipeline = document.getElementById("upload-pipeline");
+    const docTypeSelect = document.getElementById("doc-type-select");
+    const docList = document.getElementById("doc-list");
+
+    const stepExtract = document.getElementById("step-extract");
+    const stepChunk = document.getElementById("step-chunk");
+    const stepEmbed = document.getElementById("step-embed");
+
+    let selectedFile = null;
+    let uploadDone = false;
+
+    const FILE_ICON = `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#1e293b" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline></svg>`;
+    const DOTS_ICON = `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="1"></circle><circle cx="12" cy="5" r="1"></circle><circle cx="12" cy="19" r="1"></circle></svg>`;
+
+    function escapeHtml(s) {
+        return String(s ?? "").replace(/[&<>"']/g, c => (
+            { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]
+        ));
+    }
+
+    // ============================ DOCUMENT LIST ============================
+
+    async function loadDocuments() {
+        docList.innerHTML = `<p class="loading-text" style="color:#64748b; padding:16px;">Loading documents…</p>`;
+        try {
+            const docs = await apiGet("/documents");
+            renderDocuments(docs || []);
+        } catch (err) {
+            docList.innerHTML = `<p style="color:#dc2626; padding:16px;">Failed to load documents: ${escapeHtml(err.message)}</p>`;
+        }
+    }
+
+    function statusBadge(d) {
+        if (d.needs_review) {
+            return `<span class="status-indicator yellow">⚠ Held for Review</span>`;
+        }
+        if (d.is_active) {
+            return `<span class="status-indicator green">✓ Active / Indexed</span>`;
+        }
+        return `<span class="status-indicator">Inactive</span>`;
+    }
+
+    function docCardHTML(d) {
+        const conf = d.extraction_confidence ? d.extraction_confidence.toUpperCase() : "—";
+        const method = d.extraction_method || "—";
+        return `
+            <div class="doc-card" data-id="${d.document_id}">
+                <div class="doc-card-header">
+                    <div class="doc-title-area">
+                        ${FILE_ICON}
+                        <h4>${escapeHtml(d.document_name)}</h4>
+                    </div>
+                    <div class="action-menu-container">
+                        <button class="icon-btn action-toggle" data-id="${d.document_id}" data-review="${d.needs_review}">${DOTS_ICON}</button>
+                    </div>
+                </div>
+                <div class="doc-metrics-grid">
+                    <div class="metric-col">
+                        <span class="metric-label">TYPE</span>
+                        <span class="metric-val">${escapeHtml(d.document_type || "—")}</span>
+                    </div>
+                    <div class="metric-col">
+                        <span class="metric-label">EXTRACTION</span>
+                        <span class="metric-val">${escapeHtml(method)}</span>
+                        <span class="trend">${conf} confidence · ${d.chunk_count} chunks</span>
+                    </div>
+                    <div class="metric-col">
+                        <span class="metric-label">HEALTH &amp; STATUS</span>
+                        ${statusBadge(d)}
+                    </div>
+                </div>
+            </div>`;
+    }
+
+    function renderDocuments(docs) {
+        if (!docs.length) {
+            docList.innerHTML = `<p style="color:#64748b; padding:16px;">No documents yet. Click “Upload Document” to add one.</p>`;
+            return;
+        }
+        docList.innerHTML = docs
+            .map((d, i) => docCardHTML(d) + (i < docs.length - 1 ? `<div class="doc-divider"></div>` : ""))
+            .join("");
+    }
+
+    // ============================ ROW ACTIONS ============================
+
+    function closeDropdowns() {
+        document.querySelectorAll(".action-dropdown").forEach(m => m.remove());
+    }
+
+    docList.addEventListener("click", async (e) => {
+        const toggle = e.target.closest(".action-toggle");
+        if (toggle) {
+            e.stopPropagation();
+            const wasOpen = toggle.parentElement.querySelector(".action-dropdown");
+            closeDropdowns();
+            if (wasOpen) return;
+            const id = toggle.dataset.id;
+            const needsReview = toggle.dataset.review === "true";
+            const menu = document.createElement("div");
+            menu.className = "action-dropdown";
+            menu.innerHTML = `
+                ${needsReview ? `<button class="action-item" data-action="approve" data-id="${id}">✓ Approve &amp; Index</button>` : ``}
+                <button class="action-item danger" data-action="delete" data-id="${id}">🗑 Delete from DB</button>`;
+            toggle.parentElement.appendChild(menu);
+            return;
+        }
+
+        const action = e.target.closest("[data-action]");
+        if (!action) return;
+        e.stopPropagation();
+        const id = action.dataset.id;
+        closeDropdowns();
+
+        if (action.dataset.action === "approve") {
+            action.disabled = true;
+            try {
+                await apiPost(`/documents/${id}/approve`, {});
+                await loadDocuments();
+            } catch (err) {
+                alert(`Approve failed: ${err.message}`);
+            }
+        } else if (action.dataset.action === "delete") {
+            if (!confirm("Delete this document, its chunks, and its file? This cannot be undone.")) return;
+            try {
+                await apiDelete(`/documents/${id}`);
+                await loadDocuments();
+            } catch (err) {
+                alert(`Delete failed: ${err.message}`);
+            }
+        }
+    });
+
+    document.addEventListener("click", closeDropdowns);
+
+    // ============================ UPLOAD MODAL ============================
+
+    function resetDropZone() {
+        dropZone.innerHTML = `
+            <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="#94a3b8" stroke-width="1.5"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="17 8 12 3 7 8"></polyline><line x1="12" y1="3" x2="12" y2="15"></line></svg>
+            <p>Drag and drop files here or <strong>Browse</strong></p>
+            <span class="file-limits">Supported: PDF, DOCX, TXT (Max 15MB)</span>`;
+    }
 
     function openModal() {
+        selectedFile = null;
+        uploadDone = false;
         modal.classList.remove("hidden");
         dropZone.style.display = "block";
+        resetDropZone();
         pipeline.classList.add("hidden");
         startBtn.disabled = true;
         startBtn.textContent = "Start Processing";
     }
-
     function closeModal() { modal.classList.add("hidden"); }
 
     openBtn.addEventListener("click", openModal);
@@ -26,91 +171,68 @@ document.addEventListener("DOMContentLoaded", () => {
     cancelBtn.addEventListener("click", closeModal);
 
     dropZone.addEventListener("click", () => fileInput.click());
-
-    dropZone.addEventListener("dragover", (e) => {
-        e.preventDefault();
-        dropZone.classList.add("dragover");
-    });
-
+    dropZone.addEventListener("dragover", (e) => { e.preventDefault(); dropZone.classList.add("dragover"); });
     dropZone.addEventListener("dragleave", () => dropZone.classList.remove("dragover"));
-
     dropZone.addEventListener("drop", (e) => {
         e.preventDefault();
         dropZone.classList.remove("dragover");
-        if (e.dataTransfer.files.length > 0) {
-            handleFileSelect(e.dataTransfer.files[0]);
-        }
+        if (e.dataTransfer.files.length) handleFileSelect(e.dataTransfer.files[0]);
     });
-
     fileInput.addEventListener("change", (e) => {
-        if (e.target.files.length > 0) {
-            handleFileSelect(e.target.files[0]);
-        }
+        if (e.target.files.length) handleFileSelect(e.target.files[0]);
     });
 
     function handleFileSelect(file) {
+        selectedFile = file;
         dropZone.innerHTML = `
-            <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#2563eb" stroke-width="2" style="margin-bottom:8px;"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><polyline points="10 9 9 9 8 9"></polyline></svg>
-            <p style="color:#0f172a; font-weight:600;">${file.name}</p>
-            <span class="file-limits">${(file.size / 1024 / 1024).toFixed(2)} MB</span>
-        `;
+            <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#2563eb" stroke-width="2" style="margin-bottom:8px;"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline></svg>
+            <p style="color:#0f172a; font-weight:600;">${escapeHtml(file.name)}</p>
+            <span class="file-limits">${(file.size / 1024 / 1024).toFixed(2)} MB</span>`;
         startBtn.disabled = false;
     }
 
-    // --- 3. MOCK PROCESSING PIPELINE ---
-    startBtn.addEventListener("click", () => {
+    function setStep(el, state, text) {
+        el.className = `step ${state}`;
+        el.innerHTML = text;
+    }
+
+    startBtn.addEventListener("click", async () => {
+        if (uploadDone) { closeModal(); return; }
+        if (!selectedFile) return;
+
         startBtn.disabled = true;
         dropZone.style.display = "none";
         pipeline.classList.remove("hidden");
+        setStep(stepExtract, "active", "Uploading &amp; extracting text…");
+        setStep(stepChunk, "pending", "2. Generating semantic chunks…");
+        setStep(stepEmbed, "pending", "3. Vectorizing &amp; indexing…");
 
-        const steps = [
-            document.getElementById("step-extract"),
-            document.getElementById("step-chunk"),
-            document.getElementById("step-embed")
-        ];
+        try {
+            const fd = new FormData();
+            fd.append("file", selectedFile);
+            fd.append("document_type", docTypeSelect.value);
 
-        setTimeout(() => {
-            steps[0].classList.replace("active", "done");
-            steps[0].innerHTML = "1. Extraction Complete ✓";
-            steps[1].classList.replace("pending", "active");
-        }, 1500);
+            const res = await apiUpload("/documents/upload", fd);
 
-        setTimeout(() => {
-            steps[1].classList.replace("active", "done");
-            steps[1].innerHTML = "2. Chunks Generated ✓";
-            steps[2].classList.replace("pending", "active");
-        }, 3500);
-
-        setTimeout(() => {
-            steps[2].classList.replace("active", "done");
-            steps[2].innerHTML = "3. Indexed in Vector Database ✓";
+            setStep(stepExtract, "done", `1. Extracted via ${escapeHtml(res.extraction_method)} ✓`);
+            setStep(stepChunk, "done", "2. Chunks generated ✓");
+            if (res.indexed) {
+                setStep(stepEmbed, "done", `3. Indexed ${res.chunk_count} chunks (${escapeHtml(res.confidence)} confidence) ✓`);
+            } else {
+                setStep(stepEmbed, "active", `3. Held for review — low extraction confidence ⚠`);
+            }
+            await loadDocuments();
+        } catch (err) {
+            setStep(stepExtract, "active", `Upload failed: ${escapeHtml(err.message)}`);
+            setStep(stepChunk, "pending", "2. Generating semantic chunks…");
+            setStep(stepEmbed, "pending", "3. Vectorizing &amp; indexing…");
+        } finally {
+            uploadDone = true;
             startBtn.textContent = "Done";
             startBtn.disabled = false;
-            startBtn.addEventListener("click", closeModal, { once: true });
-        }, 6000);
+        }
     });
 
-    // --- 4. CRUD ACTION MENUS ---
-    document.querySelectorAll(".action-toggle").forEach(btn => {
-        btn.addEventListener("click", (e) => {
-            document.querySelectorAll(".action-dropdown").forEach(menu => menu.remove());
-
-            if(btn.disabled) return;
-
-            const menu = document.createElement("div");
-            menu.className = "action-dropdown";
-            menu.innerHTML = `
-                <button class="action-item"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="17 8 12 3 7 8"></polyline><line x1="12" y1="3" x2="12" y2="15"></line></svg> Replace Version</button>
-                <button class="action-item"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><line x1="1" y1="1" x2="23" y2="23"></line></svg> Temporarily Hide</button>
-                <button class="action-item danger"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path><line x1="10" y1="11" x2="10" y2="17"></line><line x1="14" y1="11" x2="14" y2="17"></line></svg> Delete from DB</button>
-            `;
-
-            e.currentTarget.parentElement.appendChild(menu);
-            e.stopPropagation();
-        });
-    });
-
-    document.addEventListener("click", () => {
-        document.querySelectorAll(".action-dropdown").forEach(menu => menu.remove());
-    });
+    // Initial load.
+    loadDocuments();
 });
