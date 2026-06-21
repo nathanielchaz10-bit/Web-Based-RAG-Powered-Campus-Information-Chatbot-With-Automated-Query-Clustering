@@ -29,11 +29,11 @@ document.addEventListener("DOMContentLoaded", () => {
         "Generating vector embeddings…",
     ];
 
-    function processingCardHTML(name) {
+    function processingCardHTML(name, type) {
         return `
             <div class="doc-card processing" id="processing-card">
                 <div class="doc-card-header">
-                    <div class="doc-title-area">${FILE_ICON}<h4>${escapeHtml(name)}</h4></div>
+                    <div class="doc-title-area">${typeIcon(type)}<h4>${escapeHtml(name)}</h4></div>
                 </div>
                 <div class="doc-metrics-grid">
                     <div class="metric-col" style="grid-column: 1 / -1;">
@@ -47,9 +47,9 @@ document.addEventListener("DOMContentLoaded", () => {
             </div>`;
     }
 
-    function showProcessingCard(name) {
+    function showProcessingCard(name, type) {
         removeProcessingCard();
-        docList.insertAdjacentHTML("afterbegin", processingCardHTML(name));
+        docList.insertAdjacentHTML("afterbegin", processingCardHTML(name, type));
         let i = 0;
         stageTimer = setInterval(() => {
             i += 1;
@@ -67,6 +67,21 @@ document.addEventListener("DOMContentLoaded", () => {
 
     const FILE_ICON = `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#1e293b" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline></svg>`;
     const DOTS_ICON = `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="1"></circle><circle cx="12" cy="5" r="1"></circle><circle cx="12" cy="19" r="1"></circle></svg>`;
+
+    // Per-document-type glyphs, one for each option of the upload dropdown, so a
+    // card carries an icon that matches its type. Used by both the processing
+    // card (driven by the dropdown selection) and the finished document cards.
+    function typeIcon(type) {
+        const A = 'width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#1e293b" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"';
+        const icons = {
+            POLICY: `<svg ${A}><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"></path><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"></path></svg>`,
+            DIRECTORY: `<svg ${A}><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path><circle cx="12" cy="10" r="3"></circle></svg>`,
+            FINANCIAL: `<svg ${A}><line x1="12" y1="1" x2="12" y2="23"></line><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"></path></svg>`,
+            CALENDAR: `<svg ${A}><rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect><line x1="16" y1="2" x2="16" y2="6"></line><line x1="8" y1="2" x2="8" y2="6"></line><line x1="3" y1="10" x2="21" y2="10"></line></svg>`,
+            ENROLLMENT: `<svg ${A}><path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="8.5" cy="7" r="4"></circle><line x1="20" y1="8" x2="20" y2="14"></line><line x1="23" y1="11" x2="17" y2="11"></line></svg>`,
+        };
+        return icons[type] || FILE_ICON;  // OTHER (and anything unknown) -> generic file
+    }
 
     function escapeHtml(s) {
         return String(s ?? "").replace(/[&<>"']/g, c => (
@@ -135,7 +150,7 @@ document.addEventListener("DOMContentLoaded", () => {
             <div class="doc-card" data-id="${d.document_id}">
                 <div class="doc-card-header">
                     <div class="doc-title-area">
-                        ${FILE_ICON}
+                        ${typeIcon(d.document_type)}
                         <h4>${escapeHtml(d.document_name)}</h4>
                     </div>
                     <div class="action-menu-container">
@@ -274,7 +289,7 @@ document.addEventListener("DOMContentLoaded", () => {
         // list. Block a second upload until this one resolves.
         closeModal();
         openBtn.disabled = true;
-        showProcessingCard(name);
+        showProcessingCard(name, docTypeSelect.value);
 
         try {
             const res = await apiUpload("/documents/upload", fd);
