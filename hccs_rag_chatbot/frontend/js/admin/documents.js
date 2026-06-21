@@ -16,6 +16,8 @@ document.addEventListener("DOMContentLoaded", () => {
 
     let selectedFile = null;
     let stageTimer = null;
+    let replaceDocId = null;   // non-null => modal is replacing this document
+    let currentDocs = [];      // last-rendered docs, for type/name lookup on replace
 
     // ---- In-list "processing" card (the minimized form of an upload) ----
     // Starting an upload auto-minimizes the modal and drops a card into the
@@ -101,6 +103,39 @@ document.addEventListener("DOMContentLoaded", () => {
         }
     }
 
+    // ---- Corpus stat cards (Total Tokens / Vector Index Space) ----
+    // Live figures from /documents/stats: tokens estimated from the indexed
+    // chunk text, vector space = real on-disk size of the Chroma store. Both
+    // move as documents are added or removed.
+    function compactNumber(n) {
+        if (n >= 1e9) return (n / 1e9).toFixed(1).replace(/\.0$/, "") + "B";
+        if (n >= 1e6) return (n / 1e6).toFixed(1).replace(/\.0$/, "") + "M";
+        if (n >= 1e3) return (n / 1e3).toFixed(1).replace(/\.0$/, "") + "K";
+        return String(n);
+    }
+
+    function formatBytes(bytes) {
+        if (!bytes) return "0 MB";
+        const units = ["B", "KB", "MB", "GB", "TB"];
+        let i = 0, v = bytes;
+        while (v >= 1024 && i < units.length - 1) { v /= 1024; i += 1; }
+        return `${v.toFixed(v >= 100 || i === 0 ? 0 : 1)} ${units[i]}`;
+    }
+
+    async function loadStats() {
+        const tokensEl = document.getElementById("stat-total-tokens");
+        const spaceEl = document.getElementById("stat-vector-space");
+        try {
+            const s = await apiGet("/documents/stats");
+            if (tokensEl) tokensEl.textContent = compactNumber(s.total_tokens || 0);
+            if (spaceEl) spaceEl.textContent = formatBytes(s.vector_index_bytes || 0);
+        } catch (err) {
+            console.warn("[stats] could not load corpus stats:", err.message);
+            if (tokensEl && tokensEl.textContent === "—") tokensEl.textContent = "—";
+            if (spaceEl && spaceEl.textContent === "—") spaceEl.textContent = "—";
+        }
+    }
+
     function statusBadge(d) {
         if (d.needs_review) {
             return `<span class="status-indicator yellow">⚠ Held for Review</span>`;
@@ -173,6 +208,7 @@ document.addEventListener("DOMContentLoaded", () => {
     }
 
     function renderDocuments(docs) {
+        currentDocs = docs;
         if (!docs.length) {
             docList.innerHTML = `<p style="color:#64748b; padding:16px;">No documents yet. Click “Upload Document” to add one.</p>`;
             return;
@@ -201,6 +237,7 @@ document.addEventListener("DOMContentLoaded", () => {
             menu.className = "action-dropdown";
             menu.innerHTML = `
                 ${needsReview ? `<button class="action-item" data-action="approve" data-id="${id}">✓ Approve &amp; Index</button>` : ``}
+                <button class="action-item" data-action="replace" data-id="${id}">↻ Update / Replace</button>
                 <button class="action-item danger" data-action="delete" data-id="${id}">🗑 Delete from DB</button>`;
             toggle.parentElement.appendChild(menu);
             return;
@@ -217,14 +254,18 @@ document.addEventListener("DOMContentLoaded", () => {
             try {
                 await apiPost(`/documents/${id}/approve`, {});
                 await loadDocuments();
+                loadStats();
             } catch (err) {
                 alert(`Approve failed: ${err.message}`);
             }
+        } else if (action.dataset.action === "replace") {
+            openReplaceModal(id);
         } else if (action.dataset.action === "delete") {
             if (!confirm("Delete this document, its chunks, and its file? This cannot be undone.")) return;
             try {
                 await apiDelete(`/documents/${id}`);
                 await loadDocuments();
+                loadStats();
             } catch (err) {
                 alert(`Delete failed: ${err.message}`);
             }
@@ -242,14 +283,46 @@ document.addEventListener("DOMContentLoaded", () => {
             <span class="file-limits">Supported: PDF, DOCX, TXT (Max 15MB)</span>`;
     }
 
+    // Retarget the shared modal between "ingest new" and "replace existing"
+    // (the two flows differ only in copy + which endpoint Start hits).
+    function setModalMode(mode, docName) {
+        const title = modal.querySelector(".modal-header h3");
+        const desc = modal.querySelector(".modal-desc");
+        if (mode === "replace") {
+            if (title) title.textContent = "Upload New Version";
+            if (desc) desc.textContent =
+                `Replace “${docName}” with a newer file. Its usage history is kept; ` +
+                `the old text is removed and the new file is re-indexed.`;
+            startBtn.textContent = "Replace Document";
+        } else {
+            if (title) title.textContent = "Ingest New Knowledge";
+            if (desc) desc.textContent =
+                "Upload a PDF, DOCX, or TXT file. Word tables are preserved as " +
+                "structured text and scanned PDFs are read with vision OCR; the " +
+                "text is then chunked and indexed into the vector database.";
+            startBtn.textContent = "Start Processing";
+        }
+    }
+
     function openModal() {
+        replaceDocId = null;
         selectedFile = null;
         modal.classList.remove("hidden");
         dropZone.style.display = "block";
         resetDropZone();
         if (forceOcrCheck) forceOcrCheck.checked = false;
         startBtn.disabled = true;
+        setModalMode("upload");
     }
+
+    function openReplaceModal(id) {
+        const doc = currentDocs.find(d => String(d.document_id) === String(id));
+        openModal();                 // reset to a clean slate first
+        replaceDocId = id;
+        if (doc && doc.document_type) docTypeSelect.value = doc.document_type;
+        setModalMode("replace", doc ? doc.document_name : "this document");
+    }
+
     function closeModal() { modal.classList.add("hidden"); }
 
     openBtn.addEventListener("click", openModal);
@@ -280,6 +353,8 @@ document.addEventListener("DOMContentLoaded", () => {
     startBtn.addEventListener("click", async () => {
         if (!selectedFile) return;
         const name = selectedFile.name;
+        const isReplace = replaceDocId !== null;
+        const docId = replaceDocId;          // capture before the modal resets it
         const fd = new FormData();
         fd.append("file", selectedFile);
         fd.append("document_type", docTypeSelect.value);
@@ -292,22 +367,40 @@ document.addEventListener("DOMContentLoaded", () => {
         showProcessingCard(name, docTypeSelect.value);
 
         try {
-            const res = await apiUpload("/documents/upload", fd);
+            const res = isReplace
+                ? await apiUpload(`/documents/${docId}/replace`, fd)
+                : await apiUpload("/documents/upload", fd);
+            const verb = isReplace ? "updated" : "processed";
             // Saved but held (low confidence / indexing error) -> surface why;
             // the refreshed list will show it as "Held for Review".
             if (!res.indexed) {
-                if (res.index_error) console.warn("[upload] indexing error:", res.index_error);
+                if (res.index_error) console.warn(`[${isReplace ? "replace" : "upload"}] indexing error:`, res.index_error);
                 alert(res.message || "Saved, but held for review.");
+                window.pushNotification?.({
+                    type: "document",
+                    title: "Document held for review",
+                    message: `“${name}” was saved but needs review before it’s indexed.`,
+                });
+            } else {
+                window.pushNotification?.({
+                    type: "document",
+                    title: `Document fully ${verb}`,
+                    message: isReplace
+                        ? `“${name}” replaced the previous version (v${res.version}) and was re-indexed.`
+                        : `“${name}” has been extracted, chunked, and indexed.`,
+                });
             }
         } catch (err) {
-            alert(`Upload failed: ${err.message}`);
+            alert(`${isReplace ? "Replace" : "Upload"} failed: ${err.message}`);
         } finally {
             removeProcessingCard();
             openBtn.disabled = false;
             await loadDocuments();   // replace the card with the real document
+            loadStats();             // corpus changed — refresh the headline figures
         }
     });
 
     // Initial load.
     loadDocuments();
+    loadStats();
 });
