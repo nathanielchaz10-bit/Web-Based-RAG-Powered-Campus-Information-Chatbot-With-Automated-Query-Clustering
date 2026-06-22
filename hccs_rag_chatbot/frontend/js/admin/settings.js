@@ -5,14 +5,6 @@
 // being loaded beforehand.
 // ──────────────────────────────────────────────
 
-// ── Tab switching ──
-function switchTab(btn, tab) {
-    document.querySelectorAll('.settings-tab').forEach(t => t.classList.remove('active'));
-    document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
-    btn.classList.add('active');
-    document.getElementById('tab-' + tab).classList.add('active');
-}
-
 // ── Toast ──
 function showToast(msg) {
     const t = document.getElementById('toast');
@@ -38,20 +30,14 @@ async function loadSettings() {
             if (el && val != null) el.textContent = val;
         };
 
-        setVal('school-name', s.school_name);
-        setVal('contact-email', s.contact_email);
-
-        setVal('temp-slider', s.rag_temperature);
-        setText('temp-val', s.rag_temperature);
-
-        setVal('token-input', s.max_context_tokens);
-        setText('token-val', Number(s.max_context_tokens).toLocaleString());
-
-        setVal('rel-slider', s.search_relevance_threshold);
-        setText('rel-val', s.search_relevance_threshold + '%');
-
         setVal('rate-limit-input', s.rate_limit_max_requests);
         setText('rate-limit-val', s.rate_limit_max_requests);
+
+        setVal('rate-window-input', s.rate_limit_window_seconds);
+        setText('rate-window-val', s.rate_limit_window_seconds);
+
+        setVal('rate-global-input', s.rate_limit_global_max_requests);
+        setText('rate-global-val', s.rate_limit_global_max_requests);
     } catch (err) {
         console.error('Failed to load settings:', err);
     }
@@ -60,12 +46,9 @@ async function loadSettings() {
 // ── Save settings ──
 async function saveSettings() {
     const payload = {
-        school_name: document.getElementById('school-name').value,
-        contact_email: document.getElementById('contact-email').value,
-        rag_temperature: parseFloat(document.getElementById('temp-slider').value),
-        max_context_tokens: parseInt(document.getElementById('token-input').value),
-        search_relevance_threshold: parseInt(document.getElementById('rel-slider').value),
-        rate_limit_max_requests: parseInt(document.getElementById('rate-limit-input').value)
+        rate_limit_max_requests: parseInt(document.getElementById('rate-limit-input').value),
+        rate_limit_window_seconds: parseInt(document.getElementById('rate-window-input').value),
+        rate_limit_global_max_requests: parseInt(document.getElementById('rate-global-input').value)
     };
     try {
         await apiPut('/settings', payload);
@@ -126,7 +109,7 @@ async function addAdmin() {
 
 // ── Header search: filter the Admin Management table ──
 // The only list on this page is the admins table, so typing in the header
-// search jumps to that tab and hides rows whose name/email/role don't match.
+// search hides rows whose name/email/role don't match.
 function wireSettingsSearch() {
     const input = document.querySelector('.search-bar input');
     const tbody = document.getElementById('admins-tbody');
@@ -134,15 +117,6 @@ function wireSettingsSearch() {
 
     input.addEventListener('input', () => {
         const term = input.value.trim().toLowerCase();
-
-        if (term) {
-            const adminsTab = Array.from(document.querySelectorAll('.settings-tab'))
-                .find(b => (b.getAttribute('onclick') || '').includes("'admins'"));
-            if (adminsTab && !adminsTab.classList.contains('active')) {
-                switchTab(adminsTab, 'admins');
-            }
-        }
-
         tbody.querySelectorAll('tr').forEach(tr => {
             tr.style.display = tr.textContent.toLowerCase().includes(term) ? '' : 'none';
         });

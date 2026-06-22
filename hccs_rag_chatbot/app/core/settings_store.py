@@ -5,25 +5,27 @@ parameter is declared once in ``_SPECS`` with its type, bounds, and default;
 that single registry drives validation (PUT), defaulting (GET), and startup
 loading, so adding a new editable setting is a one-line change.
 
-Two kinds of settings:
+A spec may be **live** or **store-only**:
 
   * **Live** (``live=True``): mirrors a field on the global ``settings`` object.
     On startup any persisted override is applied onto ``settings``; on PUT the
     new value is both persisted and written back to ``settings`` so it takes
-    effect immediately with no restart. The chat rate limit is the only live
-    setting today — the limiter reads ``settings.RATE_LIMIT_MAX_REQUESTS`` on
-    every request, so an admin edit applies to the very next query.
+    effect immediately with no restart.
 
-  * **Store-only** (``live=False``): persisted and shown in the UI, but not yet
-    wired into a running subsystem. The AI sliders (temperature, relevance,
-    max tokens) are store-only for now — the RAG engine still uses its built-in
-    values — so we deliberately do NOT push them onto ``settings`` and risk a
-    half-applied/units-mismatched config. Wiring them to the engine is a
-    separate task; when that happens, flip ``live`` and apply with correct units.
+  * **Store-only** (``live=False``): persisted and shown in the UI but not pushed
+    onto ``settings`` (for a value not wired into a running subsystem). None are
+    exposed today; the branch is kept for future settings.
+
+The chat **rate-limit controls** (per-student threshold, time window, and the
+server-wide ceiling) are the only settings currently exposed, and all are live
+— the limiters read the underlying ``settings`` fields on every request, so an
+admin edit applies to the very next query. RAG-engine parameters (temperature,
+relevance, context size) are intentionally NOT admin-editable: they shape
+answer quality and belong with the engine, not the portal.
 
 Values are stored as strings and cast on read against the spec, so the table
 schema never changes as parameters come and go. Overrides are sparse: a row
-exists only once an admin saves a value different from the built-in default.
+exists only once an admin saves a value.
 """
 
 from dataclasses import dataclass
@@ -70,14 +72,8 @@ class SettingSpec:
 _SPECS: dict[str, SettingSpec] = {
     s.key: s
     for s in [
-        # --- General Institution Profile (store-only) ---
-        SettingSpec("school_name", str, "Holy Child Catholic School", max_len=120),
-        SettingSpec("contact_email", str, "admin@hccs.edu", max_len=120),
-        # --- AI Configuration & RAG Intelligence (store-only for now) ---
-        SettingSpec("rag_temperature", float, 0.4, minimum=0.0, maximum=1.0),
-        SettingSpec("max_context_tokens", int, 4096, minimum=512, maximum=16384),
-        SettingSpec("search_relevance_threshold", int, 85, minimum=0, maximum=100),
-        # --- Rate limit threshold (LIVE: read by the chat limiter every request) ---
+        # --- Rate limiting (all LIVE: read by the chat limiters every request) ---
+        # Per-student threshold + the rolling window it is counted over.
         SettingSpec(
             "rate_limit_max_requests",
             int,
@@ -86,6 +82,25 @@ _SPECS: dict[str, SettingSpec] = {
             live=True,
             minimum=1,
             maximum=1000,
+        ),
+        SettingSpec(
+            "rate_limit_window_seconds",
+            int,
+            settings.RATE_LIMIT_WINDOW_SECONDS,
+            attr="RATE_LIMIT_WINDOW_SECONDS",
+            live=True,
+            minimum=5,
+            maximum=3600,
+        ),
+        # Server-wide ceiling across all students (protects the Gemini quota).
+        SettingSpec(
+            "rate_limit_global_max_requests",
+            int,
+            settings.RATE_LIMIT_GLOBAL_MAX_REQUESTS,
+            attr="RATE_LIMIT_GLOBAL_MAX_REQUESTS",
+            live=True,
+            minimum=1,
+            maximum=100000,
         ),
     ]
 }

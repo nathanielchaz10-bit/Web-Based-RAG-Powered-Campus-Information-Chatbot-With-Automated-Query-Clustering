@@ -83,11 +83,10 @@ now has `api.js`/`auth.js` loaded (they were missing).
 - **Portal Settings (`GET`/`PUT /settings`, admin).** Admin-editable runtime
   config persisted to the `app_settings` key-value table (`app/models/
   app_setting.py`), with cast/validate/default logic in `app/core/
-  settings_store.py` driven by a single `_SPECS` registry. The **rate-limit
-  threshold is "live"** — saving it writes back onto the `settings` object that
-  the chat limiter reads each request (and is re-applied on startup so it
-  survives restarts). The other fields (school name, contact email, RAG
-  temperature, max tokens, relevance threshold) are persisted and shown in the
-  UI but **store-only** — they are not yet wired into the RAG engine, which
-  still uses its built-in values (temperature=0, k=5, no relevance cut). Wiring
-  those into the engine is a follow-up.
+  settings_store.py` driven by a single `_SPECS` registry. The page exposes the
+  three **rate-limit controls** — per-student threshold, time window, and the
+  server-wide ceiling — all "live": saving writes back onto the `settings`
+  object the chat limiters read each request (re-applied on startup so they
+  survive restarts). RAG-engine parameters (temperature, relevance, context
+  size) are intentionally NOT admin-editable — they shape answer quality and
+  stay with the engine.

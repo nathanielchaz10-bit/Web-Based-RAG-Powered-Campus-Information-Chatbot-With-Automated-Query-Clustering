@@ -9,9 +9,9 @@ from app.core.database import Base
 class AppSetting(Base):
     """A single admin-editable configuration value, stored as a string.
 
-    Backs the Portal Settings page: each adjustable parameter (rate-limit
-    threshold, RAG temperature, contact email, ...) is one row keyed by a stable
-    public name. Values are kept as TEXT and cast on read by ``settings_store``
+    Backs the Portal Settings page: each adjustable parameter (currently the
+    rate-limit controls) is one row keyed by a stable public name.
+    Values are kept as TEXT and cast on read by ``settings_store``
     against a typed spec, so this table stays schema-stable as parameters come
     and go. Rows are sparse — a key is present only once an admin overrides its
     built-in default.
