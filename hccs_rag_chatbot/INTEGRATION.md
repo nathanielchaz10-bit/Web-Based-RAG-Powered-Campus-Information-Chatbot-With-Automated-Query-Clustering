@@ -66,5 +66,15 @@ now has `api.js`/`auth.js` loaded (they were missing).
   yet, so the dashboard shows "Neutral"/"General" placeholders.
 - **Real Google OAuth.** The flow is fixed and ready, but needs real
   `GOOGLE_CLIENT_ID/SECRET` + redirect URI in `.env` and `DEV_MODE=False`.
-- **Rate limiting / scheduled clustering.** Config knobs exist; enforcement not
-  wired.
+- **Rate limiting (enforced, two layers).** `POST /chat` runs two in-memory
+  sliding-window limiters before any Gemini call (`app/core/rate_limit.py`, via
+  the `enforce_chat_rate_limit` dependency):
+  - **Per-user front door** -> 429 when one user exceeds
+    `RATE_LIMIT_MAX_REQUESTS` / `RATE_LIMIT_WINDOW_SECONDS` (abuse / DDoS guard).
+  - **Global back door** -> 503 when the whole server exceeds
+    `RATE_LIMIT_GLOBAL_MAX_REQUESTS` / `RATE_LIMIT_GLOBAL_WINDOW_SECONDS`. This
+    bounds total Gemini load (one student turn fans out to ~2 Flash + 4 embedding
+    calls via RAG-Fusion), so size it ~= Flash RPM / 2.
+
+  Thresholds come from `.env`; exposing them for live editing in the Portal
+  Settings UI still needs a `/settings` backend (Tier 2).

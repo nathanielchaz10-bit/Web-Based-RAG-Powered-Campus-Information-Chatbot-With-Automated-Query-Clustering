@@ -13,6 +13,7 @@ from sqlalchemy.orm import Session
 
 from app.core.config import settings
 from app.core.database import get_db
+from app.core.rate_limit import GLOBAL_KEY, global_rate_limiter, rate_limiter
 from app.core.security import decode_access_token, TokenError
 from app.models.role import Role
 from app.models.user_account import UserAccount
@@ -93,6 +94,46 @@ def get_current_user(
         status_code=status.HTTP_401_UNAUTHORIZED,
         detail="Not authenticated",
     )
+
+
+def enforce_chat_rate_limit(user: UserAccount = Depends(get_current_user)) -> UserAccount:
+    """Two-layer rate limit for student query submission.
+
+    Wired as a dependency on the chat POST endpoint so it runs BEFORE the
+    handler body: a blocked request never invokes the RAG pipeline or any Gemini
+    embedding/LLM call. Both layers are checked with allow() first and a slot is
+    only spent (record()) once a request clears both, so a request rejected by
+    one layer doesn't burn budget in the other.
+
+      * Per-user "front door" -> 429: this user is sending too fast (their fault).
+      * Global "back door"    -> 503: the server is at capacity protecting the
+        shared Gemini quota (not this user's fault); fail fast with Retry-After
+        rather than parking the request, since sync handlers occupy threadpool
+        threads while waiting.
+
+    The frontend (api.js / chat.js) surfaces 429 as "Too many requests" and 503
+    via the response detail, so no client change is needed.
+    """
+    allowed, retry_after = rate_limiter.allow(user.user_id)
+    if not allowed:
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail="Rate limit exceeded. Please wait a moment before sending another message.",
+            headers={"Retry-After": str(retry_after)},
+        )
+
+    allowed_global, retry_global = global_rate_limiter.allow(GLOBAL_KEY)
+    if not allowed_global:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="The assistant is busy right now. Please try again in a moment.",
+            headers={"Retry-After": str(retry_global)},
+        )
+
+    # Admitted by both layers — spend one slot from each budget.
+    rate_limiter.record(user.user_id)
+    global_rate_limiter.record(GLOBAL_KEY)
+    return user
 
 
 def require_admin(user: UserAccount = Depends(get_current_user)) -> UserAccount:

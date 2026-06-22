@@ -97,8 +97,25 @@ class Settings(BaseSettings):
     INGEST_DOCX_MIN_IMAGE_PIXELS: int = 50_000
 
     # --- Rate limiting ------------------------------------------------------
-    RATE_LIMIT_MAX_REQUESTS: int = 20
+    # Two layers (see app/core/rate_limit.py). One student "send" fans out into
+    # ~2 Flash + 4 embedding Gemini calls via RAG-Fusion, so the per-user send
+    # limit alone is a coarse proxy for actual Gemini load.
+    #
+    # Per-user "front door": max queries one authenticated user may submit per
+    # window (abuse / DDoS guard). 10/60s is ~1 message every 6s -- well above
+    # human reading pace, so it never bites legitimate use but caps scripted spam.
+    RATE_LIMIT_MAX_REQUESTS: int = 10
     RATE_LIMIT_WINDOW_SECONDS: int = 60
+    # Global "back door": max chat turns the whole server admits per window,
+    # across ALL users, protecting the shared Gemini quota no matter how many
+    # users arrive at once. With a fixed per-turn fan-out, this is effectively a
+    # cap on calls to Google. Size it to your tier: roughly
+    #   RATE_LIMIT_GLOBAL_MAX_REQUESTS ~= (Gemini Flash requests-per-minute) / 2
+    # (each turn makes ~2 Flash calls). Lower it hard on the free tier; raise it
+    # on paid. Set <= 0 to disable the global layer. 30/60s here is a safe demo
+    # ceiling (~60 Flash + ~120 embedding calls/min server-wide).
+    RATE_LIMIT_GLOBAL_MAX_REQUESTS: int = 30
+    RATE_LIMIT_GLOBAL_WINDOW_SECONDS: int = 60
 
     # --- Clustering (app/services/clustering) -------------------------------
     CLUSTERING_MIN_QUERIES: int = 3
