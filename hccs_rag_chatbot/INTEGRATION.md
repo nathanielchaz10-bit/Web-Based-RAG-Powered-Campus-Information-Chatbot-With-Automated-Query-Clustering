@@ -76,5 +76,18 @@ now has `api.js`/`auth.js` loaded (they were missing).
     bounds total Gemini load (one student turn fans out to ~2 Flash + 4 embedding
     calls via RAG-Fusion), so size it ~= Flash RPM / 2.
 
-  Thresholds come from `.env`; exposing them for live editing in the Portal
-  Settings UI still needs a `/settings` backend (Tier 2).
+  Thresholds come from `.env` defaults, but the **per-user rate-limit threshold
+  is now admin-editable at runtime** via Portal Settings (see below) and applies
+  to the next query with no restart.
+
+- **Portal Settings (`GET`/`PUT /settings`, admin).** Admin-editable runtime
+  config persisted to the `app_settings` key-value table (`app/models/
+  app_setting.py`), with cast/validate/default logic in `app/core/
+  settings_store.py` driven by a single `_SPECS` registry. The **rate-limit
+  threshold is "live"** — saving it writes back onto the `settings` object that
+  the chat limiter reads each request (and is re-applied on startup so it
+  survives restarts). The other fields (school name, contact email, RAG
+  temperature, max tokens, relevance threshold) are persisted and shown in the
+  UI but **store-only** — they are not yet wired into the RAG engine, which
+  still uses its built-in values (temperature=0, k=5, no relevance cut). Wiring
+  those into the engine is a follow-up.

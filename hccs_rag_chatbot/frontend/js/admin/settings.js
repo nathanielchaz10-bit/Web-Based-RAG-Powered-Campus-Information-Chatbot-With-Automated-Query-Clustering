@@ -21,6 +21,42 @@ function showToast(msg) {
     setTimeout(() => t.classList.remove('visible'), 3000);
 }
 
+// ── Load current settings into the form ──
+// GET /settings (admin-only) returns the effective values; populate each field
+// and its display label. Runs on page load after the admin guard passes.
+async function loadSettings() {
+    try {
+        const s = await apiGet('/settings');
+        if (!s) return;
+
+        const setVal = (id, val) => {
+            const el = document.getElementById(id);
+            if (el && val != null) el.value = val;
+        };
+        const setText = (id, val) => {
+            const el = document.getElementById(id);
+            if (el && val != null) el.textContent = val;
+        };
+
+        setVal('school-name', s.school_name);
+        setVal('contact-email', s.contact_email);
+
+        setVal('temp-slider', s.rag_temperature);
+        setText('temp-val', s.rag_temperature);
+
+        setVal('token-input', s.max_context_tokens);
+        setText('token-val', Number(s.max_context_tokens).toLocaleString());
+
+        setVal('rel-slider', s.search_relevance_threshold);
+        setText('rel-val', s.search_relevance_threshold + '%');
+
+        setVal('rate-limit-input', s.rate_limit_max_requests);
+        setText('rate-limit-val', s.rate_limit_max_requests);
+    } catch (err) {
+        console.error('Failed to load settings:', err);
+    }
+}
+
 // ── Save settings ──
 async function saveSettings() {
     const payload = {
@@ -28,7 +64,8 @@ async function saveSettings() {
         contact_email: document.getElementById('contact-email').value,
         rag_temperature: parseFloat(document.getElementById('temp-slider').value),
         max_context_tokens: parseInt(document.getElementById('token-input').value),
-        search_relevance_threshold: parseInt(document.getElementById('rel-slider').value)
+        search_relevance_threshold: parseInt(document.getElementById('rel-slider').value),
+        rate_limit_max_requests: parseInt(document.getElementById('rate-limit-input').value)
     };
     try {
         await apiPut('/settings', payload);
@@ -123,4 +160,5 @@ document.addEventListener('DOMContentLoaded', async () => {
         const user = await requireAdmin();
         if (!user) return; // requireAdmin handles the redirect
     }
+    loadSettings();
 });

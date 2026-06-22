@@ -158,6 +158,16 @@
                             <input type="range" min="0" max="100" step="5" value="85" id="rel-slider" oninput="document.getElementById('rel-val').textContent=this.value+'%'" />
                             <span class="slider-hint">Filters results based on vector similarity score.</span>
                         </div>
+                        <div class="slider-group">
+                            <div class="slider-top">
+                                <span class="slider-label">Rate Limit (queries / min)</span>
+                                <span class="slider-val" id="rate-limit-val">10</span>
+                            </div>
+                            <div class="token-input-wrap">
+                                <input type="number" value="10" id="rate-limit-input" min="1" max="1000" step="1" oninput="document.getElementById('rate-limit-val').textContent=this.value" />
+                            </div>
+                            <span class="slider-hint">Max queries one student may send per minute (DDoS / abuse protection).</span>
+                        </div>
                     </div>
                 </div>
 

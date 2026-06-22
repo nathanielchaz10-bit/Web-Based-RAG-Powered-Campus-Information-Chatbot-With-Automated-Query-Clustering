@@ -28,7 +28,9 @@ from app.core.database import Base, engine, SessionLocal
 from app.core.migrations import run_migrations
 import app.models  # noqa: F401  (registers all ORM models on Base.metadata)
 from app.api import auth, chat, clusters, dashboard, documents
+from app.api import settings as settings_routes
 from app.api.deps import ensure_roles
+from app.core import settings_store
 from app.services.clustering.scheduler import start_scheduler, stop_scheduler
 
 FRONTEND_DIR = Path(__file__).resolve().parent / "frontend"
@@ -55,6 +57,9 @@ def on_startup():
     db = SessionLocal()
     try:
         ensure_roles(db)
+        # Apply any admin-saved overrides (e.g. the rate-limit threshold) onto
+        # the live `settings` object so they survive restarts.
+        settings_store.load_overrides_into_config(db)
     finally:
         db.close()
 
@@ -70,6 +75,7 @@ app.include_router(chat.router)
 app.include_router(clusters.router)
 app.include_router(dashboard.router)
 app.include_router(documents.router)
+app.include_router(settings_routes.router)
 
 
 @app.get("/api/health")
