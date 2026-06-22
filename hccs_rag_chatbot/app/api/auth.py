@@ -65,6 +65,20 @@ async def callback(code: str, db: Session = Depends(get_db)):
         db.add(user)
         db.commit()
         db.refresh(user)
+    else:
+        # A Head Admin can deactivate accounts; block their sign-in here too.
+        if not user.is_active:
+            db.add(AuthenticationLog(
+                user_id=user.user_id, event_type="FAILED",
+                timestamp=datetime.utcnow(), status="Account deactivated",
+            ))
+            db.commit()
+            return RedirectResponse(f"{FRONTEND_LOGIN}?error=Account+deactivated")
+        # A pre-provisioned ("invited") admin signs in for the first time: bind
+        # their real Google identity, keeping the role the Head Admin assigned.
+        if (user.google_id or "").startswith("pending:"):
+            user.google_id = user_info["sub"]
+            user.display_name = user_info.get("name", user.display_name)
 
     user.last_active = datetime.utcnow()
     db.add(AuthenticationLog(

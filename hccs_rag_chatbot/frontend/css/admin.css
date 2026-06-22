@@ -198,9 +198,15 @@ body {
 .kpi-label { font-size: 12px; font-weight: 600; color: #64748b; letter-spacing: 0.5px; text-transform: uppercase; margin-bottom: 12px; }
 .kpi-value-row { display: flex; align-items: flex-end; gap: 8px; }
 .kpi-value { font-size: 28px; font-weight: 700; color: #0f172a; line-height: 1; }
-.kpi-trend.green { color: #10b981; font-size: 13px; font-weight: 600; margin-bottom: 3px; }
+.kpi-trend { font-size: 13px; font-weight: 600; margin-bottom: 3px; color: #94a3b8; }
+.kpi-trend.green { color: #10b981; }
+.kpi-trend.red { color: #ef4444; }
+.kpi-sub { font-size: 12px; color: #94a3b8; margin-top: 8px; }
 
-.badge-optimal { background-color: #e0f2fe; color: #0284c7; font-size: 10px; font-weight: 700; padding: 4px 8px; border-radius: 4px; margin-bottom: 4px;}
+.badge-optimal, .badge-fair, .badge-low { font-size: 10px; font-weight: 700; padding: 4px 8px; border-radius: 4px; margin-bottom: 4px; }
+.badge-optimal { background-color: #ecfdf5; color: #059669; }
+.badge-fair    { background-color: #fffbeb; color: #b45309; }
+.badge-low     { background-color: #fef2f2; color: #dc2626; }
 .badge-sync { color: #10b981; font-size: 11px; font-weight: 600; display: flex; align-items: center; gap: 4px; margin-bottom: 4px;}
 
 .dashboard-grid {
@@ -335,16 +341,29 @@ body {
 .status-header { display: flex; align-items: center; margin-bottom: 12px; }
 .icon-box { width: 28px; height: 28px; border-radius: 6px; display: flex; justify-content: center; align-items: center; margin-right: 12px; }
 .icon-box.green { background-color: #ecfdf5; color: #10b981; }
+.icon-box.grey  { background-color: #f1f5f9; color: #94a3b8; }
 .health-title { font-size: 14px; font-weight: 600; color: #1e293b; flex: 1; }
 .health-badge { font-size: 12px; font-weight: 600; color: #10b981; }
+.health-badge.green  { color: #10b981; }
+.health-badge.grey   { color: #94a3b8; }
+.health-badge.yellow { color: #d97706; }
+.health-badge.red    { color: #ef4444; }
+.health-sub { font-size: 11px; color: #94a3b8; margin-top: 6px; }
 
 .progress-bar { height: 4px; background-color: #e2e8f0; border-radius: 2px; overflow: hidden; }
-.progress-bar .fill.green-fill { background-color: #10b981; }
+.progress-bar .fill { height: 100%; transition: width 0.3s ease; }
+.progress-bar .fill.green-fill  { background-color: #10b981; }
+.progress-bar .fill.grey-fill   { background-color: #cbd5e1; }
+.progress-bar .fill.yellow-fill { background-color: #f59e0b; }
+.progress-bar .fill.red-fill    { background-color: #ef4444; }
 
 .metric-row { display: flex; justify-content: space-between; padding: 12px 0; border-bottom: 1px solid #f1f5f9; }
-.metric-row:last-of-type { border-bottom: none; margin-bottom: 16px; }
+.metric-row:last-of-type { border-bottom: none; }
 .metric-label { font-size: 13px; color: #64748b; }
 .metric-value { font-size: 14px; font-weight: 600; color: #0f172a; }
+
+.health-trend { margin-top: 16px; }
+.trend-chart { position: relative; height: 90px; margin-top: 8px; }
 
 .outline-btn { width: 100%; padding: 10px; background: transparent; border: 1px solid #e2e8f0; border-radius: 8px; color: #475569; font-weight: 600; font-size: 13px; cursor: pointer; transition: all 0.2s; }
 .outline-btn:hover { background-color: #f8fafc; border-color: #cbd5e1; }

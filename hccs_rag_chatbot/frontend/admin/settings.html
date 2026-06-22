@@ -124,23 +124,7 @@
                             </tr>
                         </thead>
                         <tbody id="admins-tbody">
-                            <tr>
-                                <td>
-                                    <div class="admin-name-cell">
-                                        <div class="admin-avatar av-dark">SJ</div>
-                                        <div class="admin-name-info">
-                                            <strong>Sr. Mary Joseph</strong>
-                                            <span>m.joseph@hccs.edu</span>
-                                        </div>
-                                    </div>
-                                </td>
-                                <td><span class="role-pill head">Head Admin</span></td>
-                                <td>Today, 10:45 AM</td>
-                                <td>
-                                    <button class="action-icon-btn" title="Edit"><svg width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg></button>
-                                    <button class="action-icon-btn danger" title="Delete"><svg width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4h6v2"/></svg></button>
-                                </td>
-                            </tr>
+                            <tr><td colspan="4" style="text-align:center;color:#94a3b8;padding:20px;">Loading administrators…</td></tr>
                         </tbody>
                     </table>
                 </div>
@@ -161,7 +145,7 @@
 <div class="modal-overlay hidden" id="add-admin-modal">
     <div class="modal-content modal-sm">
         <div class="modal-header">
-            <h3>Add New Administrator</h3>
+            <h3 id="admin-modal-title">Add New Administrator</h3>
             <button class="icon-btn" onclick="closeAddAdminModal()"><svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
         </div>
         <div class="modal-body">
@@ -187,7 +171,7 @@
         </div>
         <div class="modal-footer">
             <button class="outline-btn btn-cancel" onclick="closeAddAdminModal()">Cancel</button>
-            <button class="save-btn" onclick="addAdmin()">Add Administrator</button>
+            <button class="save-btn" id="admin-modal-submit" onclick="saveAdmin()">Add Administrator</button>
         </div>
     </div>
 </div>

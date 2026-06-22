@@ -27,7 +27,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.core.database import Base, engine, SessionLocal
 from app.core.migrations import run_migrations
 import app.models  # noqa: F401  (registers all ORM models on Base.metadata)
-from app.api import auth, chat, clusters, dashboard, documents
+from app.api import admins, auth, chat, clusters, dashboard, documents
 from app.api import settings as settings_routes
 from app.api.deps import ensure_roles
 from app.core import settings_store
@@ -76,6 +76,7 @@ app.include_router(clusters.router)
 app.include_router(dashboard.router)
 app.include_router(documents.router)
 app.include_router(settings_routes.router)
+app.include_router(admins.router)
 
 
 @app.get("/api/health")

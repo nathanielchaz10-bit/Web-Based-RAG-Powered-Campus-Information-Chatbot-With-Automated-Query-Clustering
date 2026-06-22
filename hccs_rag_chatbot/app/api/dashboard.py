@@ -15,6 +15,7 @@ from sqlalchemy.orm import Session
 
 from app.api.deps import require_admin
 from app.core.database import get_db
+from app.core.rate_limit import GLOBAL_KEY, global_rate_limiter
 from app.models.chat_response import ChatResponse
 from app.models.chat_session import ChatSession
 from app.models.document import Document
@@ -28,6 +29,19 @@ _FALLBACK_PHRASES = (
     "i don't know", "i do not know", "don't have information",
     "not in the context", "cannot find",
 )
+
+
+def _is_answered(text, is_fallback) -> bool:
+    """Whether a chat response counts as a success (the assistant answered).
+
+    Prefers the stored ``is_fallback`` flag, set at generation time from the
+    NO_ANSWER sentinel. Legacy rows written before that flag existed have
+    ``is_fallback IS NULL``; for those we fall back to the old phrase heuristic
+    on the response text.
+    """
+    if is_fallback is not None:
+        return not is_fallback
+    return not any(p in (text or "").lower() for p in _FALLBACK_PHRASES)
 
 
 @router.get("/metrics")
@@ -54,13 +68,20 @@ def metrics(db: Session = Depends(get_db), _: UserAccount = Depends(require_admi
         .count()
     )
 
-    responses = db.query(ChatResponse.response_text).all()
-    if responses:
+    # Windowed to the last 7 days so this tracks *recent* performance, like the
+    # other live cards, instead of an all-time average that barely moves. A
+    # response "succeeds" when it isn't one of the canned can't-answer fallbacks.
+    recent_responses = (
+        db.query(ChatResponse.response_text, ChatResponse.is_fallback)
+        .filter(ChatResponse.generated_at >= now - timedelta(days=7))
+        .all()
+    )
+    if recent_responses:
         good = sum(
-            1 for (text,) in responses
-            if not any(p in (text or "").lower() for p in _FALLBACK_PHRASES)
+            1 for (text, is_fb) in recent_responses
+            if _is_answered(text, is_fb)
         )
-        ai_success_rate = round(100.0 * good / len(responses), 1)
+        ai_success_rate = round(100.0 * good / len(recent_responses), 1)
     else:
         ai_success_rate = 100.0
 
@@ -105,6 +126,29 @@ def system_health(db: Session = Depends(get_db), _: UserAccount = Depends(requir
     latencies = [v for (v,) in avg_latency if v is not None]
     avg_latency_ms = int(sum(latencies) / len(latencies)) if latencies else 0
 
+    # Latency trend: average response time per day across the last 7 days, so an
+    # admin can see whether the chatbot is getting slower over time (the paper's
+    # "response efficiency over time"). Built straight from QueryLog, which
+    # already persists every turn's latency + timestamp -- no separate metrics
+    # sampler needed. Days with no traffic stay None so the chart skips them.
+    today = datetime.utcnow().date()
+    days = [today - timedelta(days=i) for i in range(6, -1, -1)]
+    sums = {d: 0 for d in days}
+    counts = {d: 0 for d in days}
+    window_start = datetime.combine(days[0], datetime.min.time())
+    trend_rows = (
+        db.query(QueryLog.timestamp, QueryLog.response_time_ms)
+        .filter(QueryLog.timestamp >= window_start)
+        .filter(QueryLog.response_time_ms.isnot(None))
+        .all()
+    )
+    for ts, ms in trend_rows:
+        d = ts.date()
+        if d in counts:
+            sums[d] += ms
+            counts[d] += 1
+    trend_values = [round(sums[d] / counts[d]) if counts[d] else None for d in days]
+
     try:
         import psutil
         memory_usage_percent = round(psutil.virtual_memory().percent, 1)
@@ -112,11 +156,36 @@ def system_health(db: Session = Depends(get_db), _: UserAccount = Depends(requir
         memory_usage_percent = 0.0
 
     ready = rag_service.is_ready()
+
+    # Gemini rate-limit headroom: how much of the global per-window turn budget
+    # is currently spent. Because each chat turn fans out into a fixed number of
+    # Gemini calls, this global limiter IS the Gemini-quota guard -- so its usage
+    # is the earliest warning that the bot is about to start rejecting students
+    # (HTTP 429). Read without spending a slot.
+    used, gmax, gwindow = global_rate_limiter.usage(GLOBAL_KEY)
+    if gmax <= 0:
+        gemini_headroom = {
+            "enabled": False, "used": 0, "max": 0,
+            "percent": 0.0, "window_seconds": gwindow, "status": "Disabled",
+        }
+    else:
+        percent = round(100.0 * used / gmax, 1)
+        status = "Healthy" if percent < 70 else ("Busy" if percent < 100 else "Saturated")
+        gemini_headroom = {
+            "enabled": True, "used": used, "max": gmax,
+            "percent": percent, "window_seconds": gwindow, "status": status,
+        }
+
     return {
         "vector_index_health": 100 if ready else 0,
         "vector_index_status": "Online" if ready else "Idle",
         "avg_latency_ms": avg_latency_ms,
         "memory_usage_percent": memory_usage_percent,
+        "latency_trend": {
+            "labels": [[d.strftime("%a"), f"{d.strftime('%b')} {d.day}"] for d in days],
+            "values": trend_values,
+        },
+        "gemini_headroom": gemini_headroom,
     }
 
 
@@ -168,7 +237,7 @@ def recent_inquiries(
             "timestamp": qr.timestamp.strftime("%Y-%m-%d %H:%M") if qr.timestamp else "",
             "query_text": qr.query_text,
             "user_email": email,
-            "intent": qr.detected_intent or "General",
+            "intent": qr.detected_intent or "General Inquiry",
             "sentiment": qr.sentiment or "Neutral",
         })
 

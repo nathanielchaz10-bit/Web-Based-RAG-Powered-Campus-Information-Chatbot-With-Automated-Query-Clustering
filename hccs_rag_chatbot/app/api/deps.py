@@ -84,6 +84,11 @@ def get_current_user(
             )
         user = db.query(UserAccount).get(user_id)
         if user:
+            if not user.is_active:
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail="This account has been deactivated.",
+                )
             return user
         # Token valid but user gone — fall through to dev/401 handling below.
 
@@ -143,5 +148,16 @@ def require_admin(user: UserAccount = Depends(get_current_user)) -> UserAccount:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Admin access required",
+        )
+    return user
+
+
+def require_head_admin(user: UserAccount = Depends(get_current_user)) -> UserAccount:
+    """Allow only the Head Admin (manages other admin accounts)."""
+    role_name = user.role.role_name if user.role else None
+    if role_name != "Head Admin":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Head Admin access required",
         )
     return user

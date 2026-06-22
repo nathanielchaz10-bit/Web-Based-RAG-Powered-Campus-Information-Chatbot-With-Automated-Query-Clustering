@@ -149,6 +149,7 @@ def chat(
         query_id=query.query_id,
         response_text=result["answer"],
         source_chunks=json.dumps(result["sources"]),
+        is_fallback=result.get("is_fallback", False),
         generated_at=datetime.utcnow(),
     ))
 

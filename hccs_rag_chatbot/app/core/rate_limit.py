@@ -91,6 +91,25 @@ class SlidingWindowRateLimiter:
         with self._lock:
             self._hits[key].append(time.monotonic())
 
+    def usage(self, key: object) -> tuple[int, int, int]:
+        """Report current window usage for ``key`` WITHOUT spending a slot.
+
+        Returns ``(used, max_requests, window_seconds)`` after pruning expired
+        hits, so callers (e.g. the dashboard health panel) can show how much of
+        the budget is spent. A non-positive ``max_requests`` means this layer is
+        disabled.
+        """
+        max_requests, window = self._limits()
+        if max_requests <= 0 or window <= 0:
+            return 0, max_requests, window
+        now = time.monotonic()
+        cutoff = now - window
+        with self._lock:
+            hits = self._hits[key]
+            while hits and hits[0] <= cutoff:
+                hits.popleft()
+            return len(hits), max_requests, window
+
 
 # Per-user "front door": abuse / DDoS guard keyed by user_id.
 rate_limiter = SlidingWindowRateLimiter(

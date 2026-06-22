@@ -59,11 +59,18 @@ now has `api.js`/`auth.js` loaded (they were missing).
   (`preprocessor` → `vectorizer` → `algorithm` → `labeler`, orchestrated by
   `pipeline.py`). It replaces the original `src/cluster_engine.py` LLM-grouping
   prototype, which was retired to `archive/` along with the Streamlit frontend.
+- **NLP enrichment (sentiment + intent) is local and zero-cost.** Each logged
+  `QueryLog` is tagged at write time (`app/api/chat.py` → `app/services/nlp/`)
+  with a `sentiment` bucket (VADER lexicon + an urgency-term override →
+  *Positive / Inquisitive*, *Neutral / Transactional*, *Urgent / Frustrated*)
+  and a `detected_intent` topic label (rule-based, word-boundary keyword
+  scoring across 10 categories with a *General Inquiry* catch-all). Both run on
+  the raw query string after the answer is generated and never block the chat
+  turn — any failure degrades to a NULL column. Surfaced in the dashboard's
+  Recent Student Inquiries table and the Query Clusters sentiment distribution.
 
 ## Not yet integrated (next steps)
 
-- **NLP enrichment.** `QueryLog.sentiment` / `detected_intent` are not populated
-  yet, so the dashboard shows "Neutral"/"General" placeholders.
 - **Real Google OAuth.** The flow is fixed and ready, but needs real
   `GOOGLE_CLIENT_ID/SECRET` + redirect URI in `.env` and `DEV_MODE=False`.
 - **Rate limiting (enforced, two layers).** `POST /chat` runs two in-memory
@@ -90,3 +97,14 @@ now has `api.js`/`auth.js` loaded (they were missing).
   survive restarts). RAG-engine parameters (temperature, relevance, context
   size) are intentionally NOT admin-editable — they shape answer quality and
   stay with the engine.
+
+- **Admin Management (`/admins`, `app/api/admins.py`).** Backs the Portal
+  Settings → Admin Management panel over real `UserAccount` + `Role` rows.
+  `GET /admins` (any admin) lists admin-tier accounts; `POST /admins`,
+  `PUT /admins/{id}`, and `POST /admins/{id}/status` are **Head-Admin-only**
+  (`require_head_admin`). Add is a *pre-provision*: the row is created with a
+  `pending:` placeholder `google_id` and the assigned role; on first Google
+  sign-in the auth callback binds the real identity (and blocks deactivated
+  accounts). Deactivation is a soft `is_active` flag enforced in
+  `get_current_user`, with guards against deactivating yourself or the last
+  Head Admin.
