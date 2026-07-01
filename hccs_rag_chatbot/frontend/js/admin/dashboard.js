@@ -79,39 +79,50 @@ async function loadMetricCards() {
     try {
         const data = await apiGet("/dashboard/metrics");
 
-        document.getElementById("metric-cards").innerHTML = `
-            <div class="metric-card">
-                <p class="metric-label">Total Queries</p>
-                <p class="metric-value">
-                    ${data.total_queries.toLocaleString()}
-                    <span class="metric-tag green">
-                        +${data.query_growth}%
-                    </span>
-                </p>
+        // Week-over-week growth: green "+" when up, red when down (the metrics
+        // endpoint can return a negative query_growth).
+        const up = data.query_growth >= 0;
+        const growth = `${up ? "+" : ""}${data.query_growth}%`;
+
+        // AI success badge reflects the actual rate (was a permanent "Optimal"):
+        // >=90 Optimal, 70-89 Fair, <70 Low.
+        const rate = data.ai_success_rate;
+        const successBadge = rate >= 90 ? { cls: "badge-optimal", txt: "Optimal" }
+                           : rate >= 70 ? { cls: "badge-fair", txt: "Fair" }
+                           : { cls: "badge-low", txt: "Low" };
+
+        document.getElementById("kpi-container").innerHTML = `
+            <div class="kpi-card">
+                <p class="kpi-label">Total Queries</p>
+                <div class="kpi-value-row">
+                    <span class="kpi-value">${data.total_queries.toLocaleString()}</span>
+                    <span class="kpi-trend ${up ? "green" : "red"}">${growth}</span>
+                </div>
             </div>
-            <div class="metric-card">
-                <p class="metric-label">Active Sessions</p>
-                <p class="metric-value">
-                    ${data.active_sessions.toLocaleString()}
-                </p>
-                <p class="metric-sub">Authenticated · last 30 min</p>
+            <div class="kpi-card">
+                <p class="kpi-label">Active Sessions</p>
+                <div class="kpi-value-row">
+                    <span class="kpi-value">${data.active_sessions.toLocaleString()}</span>
+                </div>
+                <p class="kpi-sub">Authenticated &middot; last 30 min</p>
             </div>
-            <div class="metric-card">
-                <p class="metric-label">AI Success Rate</p>
-                <p class="metric-value">
-                    ${data.ai_success_rate}%
-                    <span class="metric-tag blue">Optimal</span>
-                </p>
+            <div class="kpi-card">
+                <p class="kpi-label">AI Success Rate</p>
+                <div class="kpi-value-row">
+                    <span class="kpi-value">${data.ai_success_rate}%</span>
+                    <span class="${successBadge.cls}">${successBadge.txt}</span>
+                </div>
             </div>
-            <div class="metric-card">
-                <p class="metric-label">Indexed Knowledge</p>
-                <p class="metric-value">
-                    ${data.indexed_documents} Docs
-                </p>
+            <div class="kpi-card">
+                <p class="kpi-label">Indexed Knowledge</p>
+                <div class="kpi-value-row">
+                    <span class="kpi-value">${data.indexed_documents}</span>
+                    <span class="kpi-trend">Docs</span>
+                </div>
             </div>
         `;
     } catch (err) {
-        showError("metric-cards", "Could not load metrics.");
+        showError("kpi-container", "Could not load metrics.");
     }
 }
 
@@ -200,32 +211,141 @@ async function loadSystemHealth() {
     try {
         const data = await apiGet("/dashboard/system-health");
 
-        document.getElementById("system-health").innerHTML = `
-            <div class="health-row">
-                <div>
-                    <p class="health-label">RAG Vector Index</p>
-                    <div class="progress-bar">
-                        <div class="progress-fill"
-                             style="width:${data.vector_index_health}%">
-                        </div>
-                    </div>
+        // Latency is stored in ms but the panel shows seconds (matches the
+        // paper's "average response latency in seconds").
+        const latencySec = (data.avg_latency_ms / 1000).toFixed(2);
+        const indexClass = data.vector_index_health ? "green" : "grey";
+
+        // Gemini rate-limit headroom: colour the bar/badge by how close the
+        // global per-window turn budget is to saturation. Healthy < 70% < Busy
+        // < 100% = Saturated (students start getting rejected).
+        const g = data.gemini_headroom || { enabled: false };
+        const gemColor = g.status === "Saturated" ? "red"
+                       : g.status === "Busy" ? "yellow" : "green";
+        const geminiBlock = g.enabled ? `
+            <div class="health-status">
+                <div class="status-header">
+                    <span class="health-title">Gemini Rate-Limit Headroom</span>
+                    <span class="health-badge ${gemColor}">${g.status}</span>
                 </div>
-                <span class="health-status ${data.vector_index_status.toLowerCase()}">
-                    ${data.vector_index_status}
-                </span>
+                <div class="progress-bar"><div class="fill ${gemColor}-fill" style="width:${g.percent}%"></div></div>
+                <p class="health-sub">${g.used} / ${g.max} turns used this window</p>
+            </div>` : "";
+
+        // Daily budget: how much of today's server-wide question cap is spent —
+        // the cumulative-spend guard for the fixed Gemini key. Healthy < 70% <
+        // Low < 100% = Exhausted (chat pauses until tomorrow).
+        const d = data.daily_budget || { enabled: false };
+        const dayColor = d.status === "Exhausted" ? "red"
+                       : d.status === "Low" ? "yellow" : "green";
+        const dailyBlock = d.enabled ? `
+            <div class="health-status">
+                <div class="status-header">
+                    <span class="health-title">Daily Budget (Gemini)</span>
+                    <span class="health-badge ${dayColor}">${d.status}</span>
+                </div>
+                <div class="progress-bar"><div class="fill ${dayColor}-fill" style="width:${d.percent}%"></div></div>
+                <p class="health-sub">${d.used} / ${d.max} questions used today</p>
+            </div>` : "";
+
+        // Kill switch indicator: only shown when chat has been turned off.
+        const chatOffBlock = (data.chat_enabled === false) ? `
+            <div class="health-status">
+                <div class="status-header">
+                    <span class="health-title">Chatbot Availability</span>
+                    <span class="health-badge red">Paused</span>
+                </div>
+                <p class="health-sub">The student chatbot is turned off in Portal Settings.</p>
+            </div>` : "";
+
+        document.getElementById("system-health").innerHTML = `
+            <div class="health-status">
+                <div class="status-header">
+                    <div class="icon-box ${indexClass}"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="4" y="4" width="16" height="16" rx="2" ry="2"></rect><rect x="9" y="9" width="6" height="6"></rect><line x1="9" y1="1" x2="9" y2="4"></line><line x1="15" y1="1" x2="15" y2="4"></line><line x1="9" y1="20" x2="9" y2="23"></line><line x1="15" y1="20" x2="15" y2="23"></line><line x1="20" y1="9" x2="23" y2="9"></line><line x1="20" y1="14" x2="23" y2="14"></line><line x1="1" y1="9" x2="4" y2="9"></line><line x1="1" y1="14" x2="4" y2="14"></line></svg></div>
+                    <span class="health-title">RAG Vector Index</span>
+                    <span class="health-badge ${indexClass}">${data.vector_index_status}</span>
+                </div>
+                <div class="progress-bar"><div class="fill ${indexClass}-fill" style="width:${data.vector_index_health}%"></div></div>
             </div>
-            <div class="health-row">
-                <span>Average Latency</span>
-                <strong>${data.avg_latency_ms}ms</strong>
+
+            ${chatOffBlock}
+            ${geminiBlock}
+            ${dailyBlock}
+
+            <div class="metric-row">
+                <span class="metric-label">Average Latency</span>
+                <span class="metric-value">${latencySec}s</span>
             </div>
-            <div class="health-row">
-                <span>Memory Usage</span>
-                <strong>${data.memory_usage_percent}%</strong>
+            <div class="metric-row">
+                <span class="metric-label">Memory Usage</span>
+                <span class="metric-value">${data.memory_usage_percent}%</span>
+            </div>
+
+            <div class="health-trend">
+                <span class="metric-label">Latency &middot; last 7 days</span>
+                <div class="trend-chart"><canvas id="latencyChart"></canvas></div>
             </div>
         `;
+
+        renderLatencyTrend(data.latency_trend);
     } catch (err) {
         showError("system-health", "Could not load system health.");
     }
+}
+
+
+function renderLatencyTrend(trend) {
+    if (!trend) return;
+    const ctx = document.getElementById("latencyChart");
+    if (!ctx) return;
+
+    // Plot per-day average latency in seconds; null days (no traffic) are
+    // skipped via spanGaps so a quiet day doesn't read as "0s".
+    const seconds = trend.values.map(v => (v == null ? null : v / 1000));
+    new Chart(ctx, {
+        type: "line",
+        data: {
+            labels: trend.labels,   // [["Sat", "Jun 14"], ...]
+            datasets: [{
+                data: seconds,
+                borderColor: "#3b82f6",
+                backgroundColor: "rgba(59, 130, 246, 0.12)",
+                fill: true,
+                tension: 0.35,
+                spanGaps: true,
+                borderWidth: 2,
+                pointRadius: 2,
+                pointBackgroundColor: "#3b82f6",
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: { display: false },
+                tooltip: {
+                    callbacks: {
+                        title: (items) => {
+                            const lbl = items[0].label;
+                            return Array.isArray(lbl) ? lbl.join(" ") : lbl;
+                        },
+                        label: (item) => item.raw == null ? "No traffic" : `${item.formattedValue}s avg latency`,
+                    }
+                }
+            },
+            scales: {
+                y: {
+                    beginAtZero: true,
+                    ticks: { precision: 1, font: { size: 9 }, color: "#94a3b8", callback: (v) => `${v}s` },
+                    grid: { color: "#f1f5f9" }
+                },
+                x: {
+                    ticks: { font: { size: 9 }, color: "#94a3b8", maxRotation: 0, autoSkip: true, maxTicksLimit: 7 },
+                    grid: { display: false }
+                }
+            }
+        }
+    });
 }
 
 
@@ -416,7 +536,9 @@ function intentClass(intent) {
         "Student Welfare": "intent-pink",
         "Schedule & Events": "intent-rose",
         "Facilities & Services": "intent-green",
-        "Academic Policy": "intent-grey"
+        "Academic Policy": "intent-grey",
+        // Catch-all bucket from intent.py for queries that match no category.
+        "General Inquiry": "intent-grey"
     };
     return map[intent] || "intent-grey";
 }

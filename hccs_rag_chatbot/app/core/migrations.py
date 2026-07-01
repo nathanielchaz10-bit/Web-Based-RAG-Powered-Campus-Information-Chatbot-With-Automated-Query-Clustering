@@ -59,11 +59,24 @@ def _add_document_extraction_fields(conn: Connection) -> bool:
     return changed
 
 
+def _add_chat_response_is_fallback(conn: Connection) -> bool:
+    """chat_responses.is_fallback: whether the assistant declined to answer
+    (NO_ANSWER sentinel / refusal), recorded at generation time so the
+    dashboard's AI Success Rate is exact rather than guessed from output text."""
+    if _has_column(conn, "chat_responses", "is_fallback"):
+        return False
+    conn.exec_driver_sql(
+        "ALTER TABLE chat_responses ADD COLUMN is_fallback BOOLEAN"
+    )
+    return True
+
+
 # Ordered list of (description, migration_fn). Append new ones; never mutate
 # or remove existing entries.
 _MIGRATIONS = [
     ("add query_logs.resolved_query_text", _add_resolved_query_text),
     ("add documents extraction fields", _add_document_extraction_fields),
+    ("add chat_responses.is_fallback", _add_chat_response_is_fallback),
 ]
 
 

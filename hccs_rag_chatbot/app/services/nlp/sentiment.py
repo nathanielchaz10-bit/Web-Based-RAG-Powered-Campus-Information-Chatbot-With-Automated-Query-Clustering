@@ -26,6 +26,8 @@ the optional NLP dependency hasn't been installed yet — sentiment enrichment
 is a nice-to-have, not a hard requirement for answering a student's question.
 """
 
+import re
+
 try:
     from vaderSentiment.vaderSentiment import SentimentIntensityAnalyzer
 
@@ -49,6 +51,13 @@ SENTIMENT_URGENT = "Urgent / Frustrated"
 # on routine administrative questions.
 _POSITIVE_THRESHOLD = 0.2
 _NEGATIVE_THRESHOLD = -0.2
+
+# Emphasis / shouting heuristic (see _has_emphasis_markers). A message that is
+# at least _SHOUT_CAPS_RATIO uppercase counts as "shouting" only once it has at
+# least _SHOUT_MIN_LETTERS letters, so short acronyms ("GWA?", "TOR po?") and
+# normal-case queries don't get flagged.
+_SHOUT_MIN_LETTERS = 12
+_SHOUT_CAPS_RATIO = 0.8
 
 # Words/phrases that signal urgency or distress regardless of VADER's
 # polarity score — VADER often scores these near-neutral because they
@@ -76,25 +85,56 @@ def classify_sentiment(query_text: str) -> str:
 
     text_lower = query_text.lower()
 
-    # Urgency override takes priority over the VADER score — a student
-    # typing "URGENT, deadline today!!" should never be bucketed as
-    # neutral just because VADER doesn't recognize "deadline" as negative.
+    # 1. Explicit urgency vocabulary takes priority over everything — a student
+    # typing "URGENT, deadline today!!" should never be bucketed as neutral
+    # just because VADER doesn't recognize "deadline" as negative.
     if any(term in text_lower for term in _URGENCY_OVERRIDE_TERMS):
         return SENTIMENT_URGENT
 
-    # No analyzer available (dependency not installed) — treat as neutral.
-    if _analyzer is None:
-        return SENTIMENT_NEUTRAL
-
-    scores = _analyzer.polarity_scores(query_text)
-    compound = scores["compound"]
-
+    # 2. VADER lexical polarity. A clearly positive or negative compound score
+    # is decisive, and it is checked BEFORE the emphasis heuristic below so that
+    # genuine positivity ("thanks, this is great!!!") is not mis-flagged as
+    # Frustrated just because it shouts. (compound defaults to 0.0/neutral when
+    # the optional vaderSentiment dependency is unavailable.)
+    compound = _analyzer.polarity_scores(query_text)["compound"] if _analyzer else 0.0
+    if compound >= _POSITIVE_THRESHOLD:
+        return SENTIMENT_POSITIVE
     if compound <= _NEGATIVE_THRESHOLD:
         return SENTIMENT_URGENT
-    elif compound >= _POSITIVE_THRESHOLD:
-        return SENTIMENT_POSITIVE
-    else:
-        return SENTIMENT_NEUTRAL
+
+    # 3. VADER reads this as neutral. But it only treats ALL-CAPS and "!" as
+    # *intensifiers of an existing sentiment word*, so a shouted,
+    # punctuation-heavy but lexically-neutral query — e.g.
+    # "WHEN IS THE CHRISTMAS BREAK PO!?!?!?" (VADER compound 0.0) — slips through
+    # as Neutral. Treat sustained emphasis/impatience markers as a Frustrated
+    # signal so these surface to admins instead of hiding in the neutral pile.
+    if _has_emphasis_markers(query_text):
+        return SENTIMENT_URGENT
+
+    return SENTIMENT_NEUTRAL
+
+
+def _has_emphasis_markers(text: str) -> bool:
+    """Detect shouting / impatient phrasing that VADER misses on neutral text.
+
+    Two deliberately low-false-positive signals:
+      * A run of 2+ emphasis marks ("!!", "??", "!?", "?!", "!?!?!?", ...). A
+        lone "!" or the single "?" that ends an ordinary question does NOT
+        qualify, so calm questions stay Neutral.
+      * Sustained shouting: a message that is at least _SHOUT_CAPS_RATIO
+        uppercase, guarded by _SHOUT_MIN_LETTERS so short acronyms and
+        normal-case queries don't trip it.
+    """
+    if re.search(r"[!?]{2,}", text):
+        return True
+
+    letters = [c for c in text if c.isalpha()]
+    if len(letters) >= _SHOUT_MIN_LETTERS:
+        upper_ratio = sum(1 for c in letters if c.isupper()) / len(letters)
+        if upper_ratio >= _SHOUT_CAPS_RATIO:
+            return True
+
+    return False
 
 
 def get_sentiment_score(query_text: str) -> float:

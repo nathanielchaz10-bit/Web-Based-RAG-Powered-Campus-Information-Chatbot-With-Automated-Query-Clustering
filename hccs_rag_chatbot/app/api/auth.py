@@ -1,6 +1,7 @@
+import secrets
 from datetime import datetime
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from fastapi.responses import RedirectResponse
 from sqlalchemy.orm import Session
 
@@ -24,6 +25,19 @@ router = APIRouter(prefix="/auth", tags=["Authentication"])
 
 FRONTEND_LOGIN = "/frontend/index.html"
 
+# Name of the short-lived cookie that ties a login redirect to its callback
+# (OAuth CSRF / "login CSRF" guard).
+_STATE_COOKIE = "oauth_state"
+
+
+def _cookies_secure() -> bool:
+    """Mark auth cookies Secure only when we're actually on https (the tunnel).
+
+    On plain http://localhost a Secure cookie may be dropped, which would break
+    local dev, so we key it off the configured redirect URI's scheme.
+    """
+    return settings.GOOGLE_REDIRECT_URI.lower().startswith("https")
+
 
 def _issue_token(user: UserAccount) -> str:
     return create_access_token({
@@ -33,18 +47,57 @@ def _issue_token(user: UserAccount) -> str:
     })
 
 
+@router.get("/config")
+def public_config():
+    """Public, unauthenticated flags the login page needs *before* sign-in.
+
+    Only DEV_MODE is exposed, so the frontend can hide the dev-login bypass when
+    the server isn't in dev mode. Safe to expose: in production it's just False,
+    and the /dev-login endpoint itself is already gated on DEV_MODE server-side.
+    """
+    return {"dev_mode": settings.DEV_MODE}
+
+
 @router.get("/login")
 def login():
-    return RedirectResponse(get_google_auth_url())
+    # Mint a one-time state, hand it to Google, and stash it in a short-lived
+    # cookie so the callback can confirm the response belongs to a flow THIS
+    # browser started (defends against login-CSRF / forged callbacks).
+    state = secrets.token_urlsafe(32)
+    resp = RedirectResponse(get_google_auth_url(state))
+    resp.set_cookie(
+        _STATE_COOKIE, state,
+        max_age=600, httponly=True, secure=_cookies_secure(),
+        samesite="lax", path="/",
+    )
+    return resp
 
 
 @router.get("/callback")
-async def callback(code: str, db: Session = Depends(get_db)):
+async def callback(
+    request: Request,
+    code: str,
+    state: str | None = None,
+    db: Session = Depends(get_db),
+):
+    # Verify the state echoed by Google matches the cookie we set in /login.
+    cookie_state = request.cookies.get(_STATE_COOKIE)
+    if not cookie_state or not state or not secrets.compare_digest(cookie_state, state):
+        resp = RedirectResponse(f"{FRONTEND_LOGIN}?error=Invalid+login+state.+Please+try+again.")
+        resp.delete_cookie(_STATE_COOKIE, path="/")
+        return resp
+
     token_data = await exchange_code_for_token(code)
     user_info = await get_google_user_info(token_data["access_token"])
     email = user_info.get("email")
+    # Google returns email_verified as a JSON boolean; str() also handles the
+    # rare string form ("true"), and a missing key safely becomes False.
+    email_verified = str(user_info.get("email_verified")).lower() == "true"
 
-    if not settings.DEV_MODE and not is_valid_hccs_domain(email):
+    # School-only gate. Because the app is published as External, Google lets ANY
+    # account reach this callback, so this is the sole wall: accept only a
+    # VERIFIED email on the school domain. (Skipped in DEV_MODE for local testing.)
+    if not settings.DEV_MODE and not (email_verified and is_valid_hccs_domain(email)):
         db.add(AuthenticationLog(
             event_type="FAILED", timestamp=datetime.utcnow(),
             ip_address="unknown", status="Invalid domain",
@@ -65,6 +118,20 @@ async def callback(code: str, db: Session = Depends(get_db)):
         db.add(user)
         db.commit()
         db.refresh(user)
+    else:
+        # A Head Admin can deactivate accounts; block their sign-in here too.
+        if not user.is_active:
+            db.add(AuthenticationLog(
+                user_id=user.user_id, event_type="FAILED",
+                timestamp=datetime.utcnow(), status="Account deactivated",
+            ))
+            db.commit()
+            return RedirectResponse(f"{FRONTEND_LOGIN}?error=Account+deactivated")
+        # A pre-provisioned ("invited") admin signs in for the first time: bind
+        # their real Google identity, keeping the role the Head Admin assigned.
+        if (user.google_id or "").startswith("pending:"):
+            user.google_id = user_info["sub"]
+            user.display_name = user_info.get("name", user.display_name)
 
     user.last_active = datetime.utcnow()
     db.add(AuthenticationLog(
@@ -74,8 +141,13 @@ async def callback(code: str, db: Session = Depends(get_db)):
     db.commit()
 
     token = _issue_token(user)
-    # The frontend reads ?token=... off the login page and stores it.
-    return RedirectResponse(f"{FRONTEND_LOGIN}?token={token}")
+    # Return the token in the URL *fragment* (#token=...), not the query string:
+    # fragments are never sent to the server, so the token can't leak into access
+    # logs, Referer headers, or proxies. auth.js reads it from location.hash and
+    # immediately strips it from the address bar. Clear the one-time state cookie.
+    resp = RedirectResponse(f"{FRONTEND_LOGIN}#token={token}")
+    resp.delete_cookie(_STATE_COOKIE, path="/")
+    return resp
 
 
 @router.get("/dev-login")

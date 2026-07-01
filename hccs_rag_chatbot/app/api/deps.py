@@ -13,6 +13,8 @@ from sqlalchemy.orm import Session
 
 from app.core.config import settings
 from app.core.database import get_db
+from app.core.rate_limit import GLOBAL_KEY, global_rate_limiter, rate_limiter
+from app.core import usage
 from app.core.security import decode_access_token, TokenError
 from app.models.role import Role
 from app.models.user_account import UserAccount
@@ -83,6 +85,11 @@ def get_current_user(
             )
         user = db.query(UserAccount).get(user_id)
         if user:
+            if not user.is_active:
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail="This account has been deactivated.",
+                )
             return user
         # Token valid but user gone — fall through to dev/401 handling below.
 
@@ -95,6 +102,78 @@ def get_current_user(
     )
 
 
+def enforce_chat_rate_limit(
+    user: UserAccount = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> UserAccount:
+    """Budget + abuse guard for student query submission.
+
+    Wired as a dependency on the chat POST endpoint so it runs BEFORE the
+    handler body: a blocked request never invokes the RAG pipeline or any Gemini
+    embedding/LLM call. Checks run cheapest/hardest-ceiling first:
+
+      0. Manual kill switch (CHAT_ENABLED) -> 503: admin paused chat for everyone.
+      1. Daily caps (the budget guard for a fixed-dollar Gemini key), counted
+         from QueryLog so they survive restarts:
+           * Global daily cap   -> 503: the whole server hit today's budget.
+           * Per-student daily   -> 429: this student used their daily quota.
+      2. Per-minute burst limiters (abuse / quota spikes):
+           * Per-user "front door" -> 429: this user is sending too fast.
+           * Global "back door"    -> 503: server at per-minute capacity.
+
+    The per-minute layers are checked with allow() first and a slot is only spent
+    (record()) once a request clears BOTH, so a request rejected by one layer
+    doesn't burn budget in the other. A non-positive cap disables that layer.
+    """
+    # 0. Manual kill switch — instant, server-wide pause without a restart.
+    if not settings.CHAT_ENABLED:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="The assistant is temporarily unavailable. Please check back later.",
+        )
+
+    # 1. Daily budget caps. These are the real protection for a small Gemini
+    #    budget: per-minute limits cap bursts, but only a daily ceiling caps
+    #    cumulative spend over a multi-day run.
+    global_daily_max = settings.RATE_LIMIT_GLOBAL_DAILY_MAX
+    if global_daily_max > 0 and usage.global_turns_today(db) >= global_daily_max:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="The assistant has reached today's usage limit. Please try again tomorrow.",
+            headers={"Retry-After": "3600"},
+        )
+
+    user_daily_max = settings.RATE_LIMIT_USER_DAILY_MAX
+    if user_daily_max > 0 and usage.user_turns_today(db, user.user_id) >= user_daily_max:
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail=f"You've reached your daily limit of {user_daily_max} questions. Please try again tomorrow.",
+            headers={"Retry-After": "3600"},
+        )
+
+    # 2. Per-minute burst limiters.
+    allowed, retry_after = rate_limiter.allow(user.user_id)
+    if not allowed:
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail="Rate limit exceeded. Please wait a moment before sending another message.",
+            headers={"Retry-After": str(retry_after)},
+        )
+
+    allowed_global, retry_global = global_rate_limiter.allow(GLOBAL_KEY)
+    if not allowed_global:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="The assistant is busy right now. Please try again in a moment.",
+            headers={"Retry-After": str(retry_global)},
+        )
+
+    # Admitted by both layers — spend one slot from each budget.
+    rate_limiter.record(user.user_id)
+    global_rate_limiter.record(GLOBAL_KEY)
+    return user
+
+
 def require_admin(user: UserAccount = Depends(get_current_user)) -> UserAccount:
     """Allow only admin-tier roles."""
     role_name = user.role.role_name if user.role else None
@@ -102,5 +181,16 @@ def require_admin(user: UserAccount = Depends(get_current_user)) -> UserAccount:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Admin access required",
+        )
+    return user
+
+
+def require_head_admin(user: UserAccount = Depends(get_current_user)) -> UserAccount:
+    """Allow only the Head Admin (manages other admin accounts)."""
+    role_name = user.role.role_name if user.role else None
+    if role_name != "Head Admin":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Head Admin access required",
         )
     return user

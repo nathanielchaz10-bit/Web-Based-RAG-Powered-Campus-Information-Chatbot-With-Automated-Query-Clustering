@@ -16,7 +16,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
-from app.api.deps import get_current_user
+from app.api.deps import enforce_chat_rate_limit, get_current_user
 from app.core.database import get_db
 from app.models.chat_session import ChatSession
 from app.models.chat_response import ChatResponse
@@ -100,7 +100,7 @@ def _build_history(db: Session, session: ChatSession) -> list[tuple[str, str]]:
 def chat(
     payload: ChatRequest,
     db: Session = Depends(get_db),
-    user: UserAccount = Depends(get_current_user),
+    user: UserAccount = Depends(enforce_chat_rate_limit),
 ):
     message = (payload.message or "").strip()
     if not message:
@@ -149,6 +149,7 @@ def chat(
         query_id=query.query_id,
         response_text=result["answer"],
         source_chunks=json.dumps(result["sources"]),
+        is_fallback=result.get("is_fallback", False),
         generated_at=datetime.utcnow(),
     ))
 

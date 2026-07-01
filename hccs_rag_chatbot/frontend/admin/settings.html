@@ -59,162 +59,104 @@
         <div class="content-wrapper">
             <div class="page-title">
                 <h2>Portal Settings</h2>
-                <p>Manage your institution's digital environment and AI configurations.</p>
+                <p>Manage administrator access and request rate limits.</p>
             </div>
-            <div class="settings-tabs">
-                <button class="settings-tab active" onclick="switchTab(this, 'general')">General</button>
-                <button class="settings-tab" onclick="switchTab(this, 'ai')">AI Configuration</button>
-                <button class="settings-tab" onclick="switchTab(this, 'admins')">Admin Management</button>
-            </div>
-
-            <div id="tab-general" class="tab-content active">
-                <div class="settings-grid">
-                    <div class="settings-section">
-                        <div class="section-header">
-                            <div class="section-header-icon">
-                                <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
-                            </div>
-                            <h3>General Institution Profile</h3>
-                        </div>
-                        <div class="form-row">
-                            <div class="form-fields-col">
-                                <div class="form-group">
-                                    <label>School Name</label>
-                                    <input type="text" value="Holy Child Catholic School" id="school-name" />
-                                </div>
-                                <div class="form-group">
-                                    <label>Primary Contact Email</label>
-                                    <input type="email" value="admin@hccs.edu" id="contact-email" />
-                                </div>
-                                <div class="form-group">
-                                    <label>Institution ID</label>
-                                    <input type="text" value="HCCS-2024-ADMN" disabled />
-                                </div>
-                            </div>
-                            <div class="logo-upload-area">
-                                <div class="logo-preview">
-                                    <img src="/frontend/assets/images/hccs-logo.png" alt="Logo" onerror="this.parentNode.innerHTML='<span class=&quot;logo-fallback-letter amber&quot;>H</span>'">
-                                </div>
-                                <span class="logo-upload-label">Institution Logo</span>
-                                <span class="logo-upload-hint">Recommended: 512×512 PNG or SVG</span>
-                                <button class="upload-logo-btn">
-                                    <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><polyline points="16 16 12 12 8 16"/><line x1="12" y1="12" x2="12" y2="21"/><path d="M20.39 18.39A5 5 0 0 0 18 9h-1.26A8 8 0 1 0 3 16.3"/></svg>
-                                    Update Logo
-                                </button>
-                            </div>
-                        </div>
+            <div class="settings-section spaced">
+                <div class="section-header">
+                    <div class="section-header-icon">
+                        <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
                     </div>
-                    <div class="perf-card">
-                        <div class="perf-card-icon">
-                            <svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M18 20V10"/><path d="M12 20V4"/><path d="M6 20v-6"/></svg>
+                    <h3>Rate Limiting &amp; Abuse Protection</h3>
+                </div>
+                <div class="ai-config-grid">
+                    <div class="slider-group">
+                        <div class="slider-top">
+                            <span class="slider-label">Per-Student Limit</span>
+                            <span class="slider-val" id="rate-limit-val">10</span>
                         </div>
-                        <div>
-                            <h4>System Performance</h4>
-                            <p>All core administrative modules are currently operating within nominal parameters.</p>
+                        <div class="token-input-wrap">
+                            <input type="number" value="10" id="rate-limit-input" min="1" max="1000" step="1" oninput="document.getElementById('rate-limit-val').textContent=this.value" />
                         </div>
-                        <div class="perf-card-footer">
-                            <div class="storage-label">
-                                <span>STORAGE USAGE</span>
-                                <span>72%</span>
-                            </div>
-                            <div class="storage-bar">
-                                <div class="storage-fill"></div>
-                            </div>
+                        <span class="slider-hint">Max queries one student may send per time window (abuse / DDoS guard).</span>
+                    </div>
+                    <div class="slider-group">
+                        <div class="slider-top">
+                            <span class="slider-label">Time Window (seconds)</span>
+                            <span class="slider-val blue" id="rate-window-val">60</span>
                         </div>
+                        <div class="token-input-wrap">
+                            <input type="number" value="60" id="rate-window-input" min="5" max="3600" step="5" oninput="document.getElementById('rate-window-val').textContent=this.value" />
+                        </div>
+                        <span class="slider-hint">The rolling window the per-student limit is counted over.</span>
+                    </div>
+                    <div class="slider-group">
+                        <div class="slider-top">
+                            <span class="slider-label">Server-Wide Limit (/ min)</span>
+                            <span class="slider-val maroon" id="rate-global-val">30</span>
+                        </div>
+                        <div class="token-input-wrap">
+                            <input type="number" value="30" id="rate-global-input" min="1" max="100000" step="1" oninput="document.getElementById('rate-global-val').textContent=this.value" />
+                        </div>
+                        <span class="slider-hint">Max queries the whole server accepts per minute across all students, protecting Gemini capacity.</span>
+                    </div>
+                    <div class="slider-group">
+                        <div class="slider-top">
+                            <span class="slider-label">Per-Student Limit (/ day)</span>
+                            <span class="slider-val" id="rate-user-daily-val">20</span>
+                        </div>
+                        <div class="token-input-wrap">
+                            <input type="number" value="20" id="rate-user-daily-input" min="0" max="100000" step="1" oninput="document.getElementById('rate-user-daily-val').textContent=this.value" />
+                        </div>
+                        <span class="slider-hint">Questions one student may ask per day. Spreads a limited budget fairly. 0 = unlimited.</span>
+                    </div>
+                    <div class="slider-group">
+                        <div class="slider-top">
+                            <span class="slider-label">Server-Wide Limit (/ day)</span>
+                            <span class="slider-val maroon" id="rate-global-daily-val">300</span>
+                        </div>
+                        <div class="token-input-wrap">
+                            <input type="number" value="300" id="rate-global-daily-input" min="0" max="1000000" step="10" oninput="document.getElementById('rate-global-daily-val').textContent=this.value" />
+                        </div>
+                        <span class="slider-hint">The main budget guard: total questions/day across everyone. Sized so daily &times; days stays under your Gemini credit. 0 = unlimited.</span>
                     </div>
                 </div>
-
-                <div class="settings-section spaced">
-                    <div class="section-header">
-                        <div class="section-header-icon">
-                            <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
-                        </div>
-                        <h3>AI Configuration &amp; RAG Intelligence</h3>
+                <div class="kill-switch-row" style="display:flex;align-items:center;justify-content:space-between;margin-top:18px;padding:14px 16px;border:1px solid #e2e8f0;border-radius:10px;background:#f8fafc;">
+                    <div>
+                        <span class="slider-label" style="display:block;">Chatbot Availability</span>
+                        <span class="slider-hint">Turn the student chatbot off instantly for everyone (e.g. when the budget is spent) without stopping the server.</span>
                     </div>
-                    <div class="ai-config-grid">
-                        <div class="slider-group">
-                            <div class="slider-top">
-                                <span class="slider-label">RAG Temperature</span>
-                                <span class="slider-val" id="temp-val">0.4</span>
-                            </div>
-                            <input type="range" min="0" max="1" step="0.1" value="0.4" id="temp-slider" oninput="document.getElementById('temp-val').textContent=this.value" />
-                            <span class="slider-hint">Controls the creativity of administrative query responses.</span>
-                        </div>
-                        <div class="slider-group">
-                            <div class="slider-top">
-                                <span class="slider-label">Max Context Tokens</span>
-                                <span class="slider-val blue" id="token-val">4,096</span>
-                            </div>
-                            <div class="token-input-wrap">
-                                <input type="number" value="4096" id="token-input" min="512" max="16384" step="512" oninput="document.getElementById('token-val').textContent=parseInt(this.value).toLocaleString()" />
-                            </div>
-                            <span class="slider-hint">Maximum token limit for student document synthesis.</span>
-                        </div>
-                        <div class="slider-group">
-                            <div class="slider-top">
-                                <span class="slider-label">Search Relevance Threshold</span>
-                                <span class="slider-val maroon" id="rel-val">85%</span>
-                            </div>
-                            <input type="range" min="0" max="100" step="5" value="85" id="rel-slider" oninput="document.getElementById('rel-val').textContent=this.value+'%'" />
-                            <span class="slider-hint">Filters results based on vector similarity score.</span>
-                        </div>
-                    </div>
-                </div>
-
-                <div class="settings-section">
-                    <div class="admin-mgmt-header">
-                        <h3>
-                            <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
-                            Admin Management
-                        </h3>
-                        <button class="add-admin-btn" onclick="openAddAdminModal()">
-                            <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="8.5" cy="7" r="4"/><line x1="20" y1="8" x2="20" y2="14"/><line x1="23" y1="11" x2="17" y2="11"/></svg>
-                            Add New Administrator
-                        </button>
-                    </div>
-                    <div class="table-responsive">
-                        <table class="admins-table">
-                            <thead>
-                                <tr>
-                                    <th>Administrator</th>
-                                    <th>Role</th>
-                                    <th>Last Access</th>
-                                    <th>Actions</th>
-                                </tr>
-                            </thead>
-                            <tbody id="admins-tbody">
-                                <tr>
-                                    <td>
-                                        <div class="admin-name-cell">
-                                            <div class="admin-avatar av-dark">SJ</div>
-                                            <div class="admin-name-info">
-                                                <strong>Sr. Mary Joseph</strong>
-                                                <span>m.joseph@hccs.edu</span>
-                                            </div>
-                                        </div>
-                                    </td>
-                                    <td><span class="role-pill head">Head Admin</span></td>
-                                    <td>Today, 10:45 AM</td>
-                                    <td>
-                                        <button class="action-icon-btn" title="Edit"><svg width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg></button>
-                                        <button class="action-icon-btn danger" title="Delete"><svg width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4h6v2"/></svg></button>
-                                    </td>
-                                </tr>
-                            </tbody>
-                        </table>
-                    </div>
+                    <label class="switch" style="display:inline-flex;align-items:center;gap:8px;cursor:pointer;white-space:nowrap;">
+                        <input type="checkbox" id="chat-enabled-input" checked />
+                        <span id="chat-enabled-label">Enabled</span>
+                    </label>
                 </div>
             </div>
 
-            <div id="tab-ai" class="tab-content">
-                <div class="settings-section">
-                    <p class="placeholder-note">Switch to the <strong>General</strong> tab to edit AI settings inline.</p>
+            <div class="settings-section">
+                <div class="admin-mgmt-header">
+                    <h3>
+                        <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+                        Admin Management
+                    </h3>
+                    <button class="add-admin-btn" onclick="openAddAdminModal()">
+                        <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="8.5" cy="7" r="4"/><line x1="20" y1="8" x2="20" y2="14"/><line x1="23" y1="11" x2="17" y2="11"/></svg>
+                        Add New Administrator
+                    </button>
                 </div>
-            </div>
-
-            <div id="tab-admins" class="tab-content">
-                <div class="settings-section">
-                    <p class="placeholder-note">Switch to the <strong>General</strong> tab to manage administrators.</p>
+                <div class="table-responsive">
+                    <table class="admins-table">
+                        <thead>
+                            <tr>
+                                <th>Administrator</th>
+                                <th>Role</th>
+                                <th>Last Access</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody id="admins-tbody">
+                            <tr><td colspan="4" style="text-align:center;color:#94a3b8;padding:20px;">Loading administrators…</td></tr>
+                        </tbody>
+                    </table>
                 </div>
             </div>
         </div>
@@ -233,7 +175,7 @@
 <div class="modal-overlay hidden" id="add-admin-modal">
     <div class="modal-content modal-sm">
         <div class="modal-header">
-            <h3>Add New Administrator</h3>
+            <h3 id="admin-modal-title">Add New Administrator</h3>
             <button class="icon-btn" onclick="closeAddAdminModal()"><svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
         </div>
         <div class="modal-body">
@@ -259,7 +201,7 @@
         </div>
         <div class="modal-footer">
             <button class="outline-btn btn-cancel" onclick="closeAddAdminModal()">Cancel</button>
-            <button class="save-btn" onclick="addAdmin()">Add Administrator</button>
+            <button class="save-btn" id="admin-modal-submit" onclick="saveAdmin()">Add Administrator</button>
         </div>
     </div>
 </div>

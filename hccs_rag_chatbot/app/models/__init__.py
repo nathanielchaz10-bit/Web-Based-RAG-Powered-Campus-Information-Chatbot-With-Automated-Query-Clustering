@@ -2,6 +2,7 @@
 # Layer 1 — no foreign key dependencies
 from app.models.role import Role
 from app.models.system_metrics import SystemMetrics
+from app.models.app_setting import AppSetting
 
 # Layer 2 — depends on Role
 from app.models.user_account import UserAccount
@@ -29,6 +30,7 @@ from app.models.chat_response import ChatResponse
 __all__ = [
     "Role",
     "SystemMetrics",
+    "AppSetting",
     "UserAccount",
     "AuthenticationLog",
     "ChatSession",

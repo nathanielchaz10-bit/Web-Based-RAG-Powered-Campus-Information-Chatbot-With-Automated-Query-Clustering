@@ -45,6 +45,19 @@ class Settings(BaseSettings):
     JWT_ALGORITHM: str = "HS256"
     JWT_EXPIRE_MINUTES: int = 60
 
+    # --- CORS ---------------------------------------------------------------
+    # Comma-separated list of allowed browser origins for the API. The frontend
+    # is served same-origin by this app (and behind the tunnel), so CORS is
+    # largely moot in deployment; "*" stays the permissive default for local dev
+    # (e.g. opening a page from disk). Lock it to the tunnel URL if you ever call
+    # the API cross-origin. The app authenticates with a Bearer header, not
+    # cookies, so credentialed CORS is intentionally off.
+    CORS_ALLOW_ORIGINS: str = "*"
+
+    @property
+    def cors_origins(self) -> list[str]:
+        return [o.strip() for o in self.CORS_ALLOW_ORIGINS.split(",") if o.strip()]
+
     # --- RAG configuration (mirror rag_engine.py where known) ---------------
     TOP_K_CHUNKS: int = 5
     CHUNK_SIZE: int = 1000
@@ -97,8 +110,43 @@ class Settings(BaseSettings):
     INGEST_DOCX_MIN_IMAGE_PIXELS: int = 50_000
 
     # --- Rate limiting ------------------------------------------------------
-    RATE_LIMIT_MAX_REQUESTS: int = 20
+    # Two layers (see app/core/rate_limit.py). One student "send" fans out into
+    # ~2 Flash + 4 embedding Gemini calls via RAG-Fusion, so the per-user send
+    # limit alone is a coarse proxy for actual Gemini load.
+    #
+    # Per-user "front door": max queries one authenticated user may submit per
+    # window (abuse / DDoS guard). 10/60s is ~1 message every 6s -- well above
+    # human reading pace, so it never bites legitimate use but caps scripted spam.
+    RATE_LIMIT_MAX_REQUESTS: int = 10
     RATE_LIMIT_WINDOW_SECONDS: int = 60
+    # Global "back door": max chat turns the whole server admits per window,
+    # across ALL users, protecting the shared Gemini quota no matter how many
+    # users arrive at once. With a fixed per-turn fan-out, this is effectively a
+    # cap on calls to Google. Size it to your tier: roughly
+    #   RATE_LIMIT_GLOBAL_MAX_REQUESTS ~= (Gemini Flash requests-per-minute) / 2
+    # (each turn makes ~2 Flash calls). Lower it hard on the free tier; raise it
+    # on paid. Set <= 0 to disable the global layer. 30/60s here is a safe demo
+    # ceiling (~60 Flash + ~120 embedding calls/min server-wide).
+    RATE_LIMIT_GLOBAL_MAX_REQUESTS: int = 30
+    RATE_LIMIT_GLOBAL_WINDOW_SECONDS: int = 60
+
+    # --- Daily budget protection (the real guard for a small Gemini budget) ---
+    # The per-minute limiters above only cap bursts. With a fixed-dollar key,
+    # the actual risk is CUMULATIVE spend over days, so these DAILY caps (counted
+    # from QueryLog, so they survive restarts) are what protect the budget.
+    #
+    # Per-student daily cap: spreads a scarce budget fairly so a few heavy users
+    # can't drain it. Set <= 0 to disable.
+    RATE_LIMIT_USER_DAILY_MAX: int = 20
+    # Server-wide daily cap: THE budget protector. Size it so cap * (days you run)
+    # stays under the dollar budget. Gemini 2.5 Flash is ~$0.003-0.005 per turn,
+    # so ~$10 ≈ 2,000-3,300 turns; over a 7-day run ≈ 300-450/day. Default 300
+    # leaves headroom. When hit, chat pauses until the next UTC day. Google's
+    # billing is the hard backstop. Set <= 0 to disable.
+    RATE_LIMIT_GLOBAL_DAILY_MAX: int = 300
+    # Manual kill switch: flip to False (or toggle in Portal Settings) to pause
+    # the chatbot for everyone instantly, without stopping the server.
+    CHAT_ENABLED: bool = True
 
     # --- Clustering (app/services/clustering) -------------------------------
     CLUSTERING_MIN_QUERIES: int = 3

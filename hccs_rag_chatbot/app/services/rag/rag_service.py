@@ -83,7 +83,8 @@ def answer_query(question: str, chat_history: list[tuple[str, str]] | None = Non
         chat_history: list of (role, content) where role is "human" or "ai",
             oldest first. Used to make the retriever conversation-aware.
 
-    Returns dict: answer, sources, response_time_ms, num_context_docs.
+    Returns dict: answer, is_fallback, sources, retrieved_document_ids,
+    response_time_ms, num_context_docs, resolved_question.
     """
     chain = get_rag_chain()
     formatted_history = list(chat_history or [])
@@ -95,6 +96,15 @@ def answer_query(question: str, chat_history: list[tuple[str, str]] | None = Non
     answer = results.get("answer", "")
     context_docs = results.get("context", [])
 
+    # If the model emitted the can't-answer sentinel, swap in a friendly message
+    # for the student and flag it, so the dashboard can count answerability
+    # exactly instead of string-matching the output text. (Imported here rather
+    # than at module top to preserve the lazy rag_engine import.)
+    from app.services.rag.rag_engine import FALLBACK_MESSAGE, is_no_answer
+    is_fallback = is_no_answer(answer)
+    if is_fallback:
+        answer = FALLBACK_MESSAGE
+
     # The history-aware chain rewrites follow-ups into a self-contained
     # question; surface it so the caller can log it for clustering. Falls back
     # to the original question for first turns (no rewrite happened).
@@ -102,8 +112,12 @@ def answer_query(question: str, chat_history: list[tuple[str, str]] | None = Non
 
     return {
         "answer": answer,
-        "sources": _extract_sources(context_docs),
-        "retrieved_document_ids": _retrieved_document_ids(context_docs),
+        "is_fallback": is_fallback,
+        # On a non-answer, cite nothing and log no document "usage" -- no source
+        # actually helped, so showing citations or counting a retrieval would be
+        # misleading.
+        "sources": [] if is_fallback else _extract_sources(context_docs),
+        "retrieved_document_ids": [] if is_fallback else _retrieved_document_ids(context_docs),
         "response_time_ms": response_time_ms,
         "num_context_docs": len(context_docs),
         "resolved_question": resolved_question,

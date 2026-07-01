@@ -24,6 +24,39 @@ from langchain_core.prompts import MessagesPlaceholder
 
 load_dotenv()
 
+# When the retrieved context doesn't contain the answer, the QA prompt makes the
+# model emit this EXACT token instead of an ad-hoc "I don't know". The chat layer
+# detects it (rag_service.answer_query), shows the student FALLBACK_MESSAGE
+# instead, and records is_fallback so the dashboard's AI Success Rate is exact
+# rather than guessed by string-matching the output.
+NO_ANSWER_SENTINEL = "NO_ANSWER"
+
+FALLBACK_MESSAGE = (
+    "I'm sorry, I couldn't find that information in the school's documents. "
+    "Please try rephrasing your question, or contact the school office for assistance."
+)
+
+# Backstop refusal phrases, for the rare case the model declines in prose
+# instead of emitting the sentinel.
+_NATURAL_REFUSALS = (
+    "i don't know", "i do not know", "don't have information",
+    "not in the context", "cannot find",
+)
+
+
+def is_no_answer(text: str) -> bool:
+    """True if ``text`` is the assistant declining to answer.
+
+    Primary signal is the NO_ANSWER sentinel (tolerant of surrounding quotes,
+    markdown or punctuation); the natural-language phrases are a backstop.
+    """
+    raw = (text or "").strip()
+    if raw.strip("`\"'* .").upper().startswith(NO_ANSWER_SENTINEL):
+        return True
+    low = raw.lower()
+    return any(p in low for p in _NATURAL_REFUSALS)
+
+
 # Google's embedding API occasionally returns transient server-side errors
 # (500 INTERNAL, 503 UNAVAILABLE, 429 rate limits, deadline exceeded). These are
 # not caused by our data or query -- a retry almost always succeeds. Without
@@ -260,7 +293,9 @@ def run_rag_pipeline():
     qa_system_prompt = (
         "You are a helpful assistant for Holy Child Catholic School students. "
         "Use the following pieces of retrieved context to answer the question. "
-        "If you do not know the answer based on the context, say that you do not know. "
+        "If the answer is not contained in the context, reply with EXACTLY "
+        + NO_ANSWER_SENTINEL +
+        " and nothing else; do not apologize, translate, or explain. "
         "Context: {context}"
     )
 

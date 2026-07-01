@@ -27,6 +27,12 @@ class ChatResponse(Base):
     # Quality metrics
     confidence_score = Column(Float, nullable=True)
 
+    # True when the assistant declined to answer (emitted the NO_ANSWER
+    # sentinel, or a natural-language refusal). Set at generation time and used
+    # by the dashboard's AI Success Rate. Nullable so pre-migration rows stay
+    # NULL (the dashboard falls back to phrase detection for those).
+    is_fallback = Column(Boolean, nullable=True)
+
     tokens_used = Column(Integer, nullable=True)
 
     # Timestamps
