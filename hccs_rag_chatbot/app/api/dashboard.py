@@ -14,7 +14,9 @@ from sqlalchemy import or_
 from sqlalchemy.orm import Session
 
 from app.api.deps import require_admin
+from app.core.config import settings
 from app.core.database import get_db
+from app.core import usage
 from app.core.rate_limit import GLOBAL_KEY, global_rate_limiter
 from app.models.chat_response import ChatResponse
 from app.models.chat_session import ChatSession
@@ -176,6 +178,25 @@ def system_health(db: Session = Depends(get_db), _: UserAccount = Depends(requir
             "percent": percent, "window_seconds": gwindow, "status": status,
         }
 
+    # Daily budget: how much of today's server-wide turn cap is spent. This is
+    # the cumulative-spend guard for the fixed Gemini key (the per-minute
+    # headroom above only reflects bursts). Counted from QueryLog so it's
+    # restart-proof. Also reports the manual kill switch state.
+    g_daily_max = settings.RATE_LIMIT_GLOBAL_DAILY_MAX
+    used_today = usage.global_turns_today(db)
+    if g_daily_max <= 0:
+        daily_budget = {
+            "enabled": False, "used": used_today, "max": 0,
+            "percent": 0.0, "status": "Disabled",
+        }
+    else:
+        d_percent = round(100.0 * used_today / g_daily_max, 1)
+        d_status = "Healthy" if d_percent < 70 else ("Low" if d_percent < 100 else "Exhausted")
+        daily_budget = {
+            "enabled": True, "used": used_today, "max": g_daily_max,
+            "percent": d_percent, "status": d_status,
+        }
+
     return {
         "vector_index_health": 100 if ready else 0,
         "vector_index_status": "Online" if ready else "Idle",
@@ -186,6 +207,8 @@ def system_health(db: Session = Depends(get_db), _: UserAccount = Depends(requir
             "values": trend_values,
         },
         "gemini_headroom": gemini_headroom,
+        "daily_budget": daily_budget,
+        "chat_enabled": settings.CHAT_ENABLED,
     }
 
 

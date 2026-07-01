@@ -45,6 +45,19 @@ class Settings(BaseSettings):
     JWT_ALGORITHM: str = "HS256"
     JWT_EXPIRE_MINUTES: int = 60
 
+    # --- CORS ---------------------------------------------------------------
+    # Comma-separated list of allowed browser origins for the API. The frontend
+    # is served same-origin by this app (and behind the tunnel), so CORS is
+    # largely moot in deployment; "*" stays the permissive default for local dev
+    # (e.g. opening a page from disk). Lock it to the tunnel URL if you ever call
+    # the API cross-origin. The app authenticates with a Bearer header, not
+    # cookies, so credentialed CORS is intentionally off.
+    CORS_ALLOW_ORIGINS: str = "*"
+
+    @property
+    def cors_origins(self) -> list[str]:
+        return [o.strip() for o in self.CORS_ALLOW_ORIGINS.split(",") if o.strip()]
+
     # --- RAG configuration (mirror rag_engine.py where known) ---------------
     TOP_K_CHUNKS: int = 5
     CHUNK_SIZE: int = 1000
@@ -116,6 +129,24 @@ class Settings(BaseSettings):
     # ceiling (~60 Flash + ~120 embedding calls/min server-wide).
     RATE_LIMIT_GLOBAL_MAX_REQUESTS: int = 30
     RATE_LIMIT_GLOBAL_WINDOW_SECONDS: int = 60
+
+    # --- Daily budget protection (the real guard for a small Gemini budget) ---
+    # The per-minute limiters above only cap bursts. With a fixed-dollar key,
+    # the actual risk is CUMULATIVE spend over days, so these DAILY caps (counted
+    # from QueryLog, so they survive restarts) are what protect the budget.
+    #
+    # Per-student daily cap: spreads a scarce budget fairly so a few heavy users
+    # can't drain it. Set <= 0 to disable.
+    RATE_LIMIT_USER_DAILY_MAX: int = 20
+    # Server-wide daily cap: THE budget protector. Size it so cap * (days you run)
+    # stays under the dollar budget. Gemini 2.5 Flash is ~$0.003-0.005 per turn,
+    # so ~$10 ≈ 2,000-3,300 turns; over a 7-day run ≈ 300-450/day. Default 300
+    # leaves headroom. When hit, chat pauses until the next UTC day. Google's
+    # billing is the hard backstop. Set <= 0 to disable.
+    RATE_LIMIT_GLOBAL_DAILY_MAX: int = 300
+    # Manual kill switch: flip to False (or toggle in Portal Settings) to pause
+    # the chatbot for everyone instantly, without stopping the server.
+    CHAT_ENABLED: bool = True
 
     # --- Clustering (app/services/clustering) -------------------------------
     CLUSTERING_MIN_QUERIES: int = 3

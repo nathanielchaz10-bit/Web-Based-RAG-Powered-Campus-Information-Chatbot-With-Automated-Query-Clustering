@@ -12,6 +12,17 @@ document.addEventListener("DOMContentLoaded", async () => {
     const chatHeader = document.getElementById("chat-header");
     const chatTitle = document.getElementById("chat-title");
 
+    // --- Mobile drawer ---
+    const sidebar = document.querySelector(".sidebar");
+    const menuBtn = document.getElementById("mobile-menu-btn");
+    const sidebarBackdrop = document.getElementById("sidebar-backdrop");
+    const toggleSidebar = (open) => {
+        sidebar.classList.toggle("open", open);
+        sidebarBackdrop.classList.toggle("show", open);
+    };
+    if (menuBtn) menuBtn.addEventListener("click", () => toggleSidebar(!sidebar.classList.contains("open")));
+    if (sidebarBackdrop) sidebarBackdrop.addEventListener("click", () => toggleSidebar(false));
+
     // --- Profile Popover Elements ---
     const profileBtn = document.getElementById("sidebar-footer-btn");
     const profilePopover = document.getElementById("profile-popover");
@@ -21,9 +32,13 @@ document.addEventListener("DOMContentLoaded", async () => {
     let currentSessionId = null;
     let busy = false;
 
-    // 1. Initial Setup: Live API Fetch
+    // 1. Initial Setup: enforce auth FIRST (redirects to login if the token is
+    //    missing/invalid), then populate the profile UI from the same user. The
+    //    student page previously had no guard, so after logout pressing Back
+    //    still showed the chat — requireAuth() + the bfcache guard fix that.
+    const currentUser = await requireAuth();
+    if (!currentUser) return; // requireAuth already redirected to login
     try {
-        const currentUser = await apiGet("/api/auth/me");
         if (currentUser) {
             if (typeof setUser === "function") setUser(currentUser);
 
@@ -261,6 +276,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     // 4. Session Handling
     async function loadSession(sessionId, title) {
         if (busy || currentSessionId === sessionId) return;
+        toggleSidebar(false);
         busy = true;
         chatHistory.innerHTML = "";
         const history = await apiGet(`/chat/sessions/${sessionId}/history`);
@@ -359,6 +375,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     if (newChatBtn) {
         newChatBtn.addEventListener("click", () => {
             if (busy) return;
+            toggleSidebar(false);
             currentSessionId = null; // Do not call backend yet!
             resetChatUI();
             if (chatTitle) chatTitle.textContent = "New Conversation";

@@ -2,7 +2,9 @@
 // Auth endpoints are mounted under /api on the backend; api.js BASE_URL has no
 // /api, so the calls below include it explicitly.
 
-const AUTH_BASE = "http://localhost:8000/api";
+// Relative (same-origin) — see the BASE_URL note in api.js. Auth routes are
+// mounted under /api on the backend.
+const AUTH_BASE = "/api";
 
 document.addEventListener("DOMContentLoaded", () => {
     const loginBtn = document.getElementById("google-login-btn");
@@ -24,16 +26,18 @@ function initiateGoogleLogin() {
 }
 
 async function handleOAuthCallback() {
-    const params = new URLSearchParams(window.location.search);
-    const token = params.get("token");
-    const error = params.get("error");
-
+    // Errors stay in the query string (no secret); the token arrives in the URL
+    // fragment (#token=...) so it never hits server logs or Referer headers.
+    const error = new URLSearchParams(window.location.search).get("error");
     if (error) {
         showLoginError(error);
         return;
     }
 
+    const token = new URLSearchParams(window.location.hash.slice(1)).get("token");
     if (token) {
+        // Scrub the token from the address bar / history before doing anything.
+        history.replaceState(null, "", window.location.pathname);
         setToken(token);
         try {
             const user = await apiGet("/api/auth/me");
@@ -69,7 +73,24 @@ async function logout() {
 
 // --- ROUTE GUARDS ---
 
+// Re-validate when a page is restored from the browser's back/forward cache
+// (bfcache). The browser can show a fully-rendered cached page WITHOUT re-running
+// page scripts, so after logout, pressing Back would otherwise reveal the old
+// authenticated page. On a bfcache restore with no token, bounce to login.
+// Idempotent: only the first call attaches the listener.
+let _bfcacheGuardInstalled = false;
+function installBfcacheGuard() {
+    if (_bfcacheGuardInstalled) return;
+    _bfcacheGuardInstalled = true;
+    window.addEventListener("pageshow", (event) => {
+        if (event.persisted && !getToken()) {
+            window.location.href = "/frontend/index.html";
+        }
+    });
+}
+
 async function requireAuth() {
+    installBfcacheGuard();
     const token = getToken();
     if (!token) {
         window.location.href = "/frontend/index.html";
@@ -112,7 +133,16 @@ async function devLogin(role) {
     }
 }
 
-function injectDevLogin() {
+async function injectDevLogin() {
+    // Only show the Google-login bypass when the server is actually in DEV_MODE.
+    // Fail closed: if we can't confirm it, don't render the panel.
+    try {
+        const cfg = await apiGet("/api/auth/config");
+        if (!cfg || !cfg.dev_mode) return;
+    } catch (err) {
+        return;
+    }
+
     const card = document.querySelector(".login-card");
     if (!card || document.getElementById("dev-login-panel")) return;
 

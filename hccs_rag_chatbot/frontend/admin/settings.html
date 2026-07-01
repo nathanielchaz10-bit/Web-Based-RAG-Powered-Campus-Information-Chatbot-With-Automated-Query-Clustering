@@ -99,6 +99,36 @@
                         </div>
                         <span class="slider-hint">Max queries the whole server accepts per minute across all students, protecting Gemini capacity.</span>
                     </div>
+                    <div class="slider-group">
+                        <div class="slider-top">
+                            <span class="slider-label">Per-Student Limit (/ day)</span>
+                            <span class="slider-val" id="rate-user-daily-val">20</span>
+                        </div>
+                        <div class="token-input-wrap">
+                            <input type="number" value="20" id="rate-user-daily-input" min="0" max="100000" step="1" oninput="document.getElementById('rate-user-daily-val').textContent=this.value" />
+                        </div>
+                        <span class="slider-hint">Questions one student may ask per day. Spreads a limited budget fairly. 0 = unlimited.</span>
+                    </div>
+                    <div class="slider-group">
+                        <div class="slider-top">
+                            <span class="slider-label">Server-Wide Limit (/ day)</span>
+                            <span class="slider-val maroon" id="rate-global-daily-val">300</span>
+                        </div>
+                        <div class="token-input-wrap">
+                            <input type="number" value="300" id="rate-global-daily-input" min="0" max="1000000" step="10" oninput="document.getElementById('rate-global-daily-val').textContent=this.value" />
+                        </div>
+                        <span class="slider-hint">The main budget guard: total questions/day across everyone. Sized so daily &times; days stays under your Gemini credit. 0 = unlimited.</span>
+                    </div>
+                </div>
+                <div class="kill-switch-row" style="display:flex;align-items:center;justify-content:space-between;margin-top:18px;padding:14px 16px;border:1px solid #e2e8f0;border-radius:10px;background:#f8fafc;">
+                    <div>
+                        <span class="slider-label" style="display:block;">Chatbot Availability</span>
+                        <span class="slider-hint">Turn the student chatbot off instantly for everyone (e.g. when the budget is spent) without stopping the server.</span>
+                    </div>
+                    <label class="switch" style="display:inline-flex;align-items:center;gap:8px;cursor:pointer;white-space:nowrap;">
+                        <input type="checkbox" id="chat-enabled-input" checked />
+                        <span id="chat-enabled-label">Enabled</span>
+                    </label>
                 </div>
             </div>
 

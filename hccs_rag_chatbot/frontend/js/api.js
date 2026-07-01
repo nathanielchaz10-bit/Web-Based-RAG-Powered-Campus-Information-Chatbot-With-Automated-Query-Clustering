@@ -1,6 +1,10 @@
 
 
-const BASE_URL = "http://localhost:8000";
+// Same-origin: the frontend is served by this same FastAPI app, so all API
+// calls go to whatever host the page was loaded from (localhost during dev, the
+// Cloudflare Tunnel URL in deployment). Hardcoding a host here would break the
+// shared link, because a student's browser would try to reach THEIR localhost.
+const BASE_URL = "";
 
 // Token helpers //
 
@@ -58,9 +62,11 @@ async function apiFetch(endpoint, options = {}) {
             throw new Error(data.detail || "Access denied");
         }
 
-        // Rate limited //
+        // Rate limited — surface the server's specific message (e.g. the daily
+        // quota notice) rather than a generic one. //
         if (response.status === 429) {
-            throw new Error("Too many requests. Please wait a moment.");
+            const data = await response.json().catch(() => ({}));
+            throw new Error(data.detail || "Too many requests. Please wait a moment.");
         }
 
         // Other errors //

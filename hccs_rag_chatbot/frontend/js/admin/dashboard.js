@@ -232,6 +232,32 @@ async function loadSystemHealth() {
                 <p class="health-sub">${g.used} / ${g.max} turns used this window</p>
             </div>` : "";
 
+        // Daily budget: how much of today's server-wide question cap is spent —
+        // the cumulative-spend guard for the fixed Gemini key. Healthy < 70% <
+        // Low < 100% = Exhausted (chat pauses until tomorrow).
+        const d = data.daily_budget || { enabled: false };
+        const dayColor = d.status === "Exhausted" ? "red"
+                       : d.status === "Low" ? "yellow" : "green";
+        const dailyBlock = d.enabled ? `
+            <div class="health-status">
+                <div class="status-header">
+                    <span class="health-title">Daily Budget (Gemini)</span>
+                    <span class="health-badge ${dayColor}">${d.status}</span>
+                </div>
+                <div class="progress-bar"><div class="fill ${dayColor}-fill" style="width:${d.percent}%"></div></div>
+                <p class="health-sub">${d.used} / ${d.max} questions used today</p>
+            </div>` : "";
+
+        // Kill switch indicator: only shown when chat has been turned off.
+        const chatOffBlock = (data.chat_enabled === false) ? `
+            <div class="health-status">
+                <div class="status-header">
+                    <span class="health-title">Chatbot Availability</span>
+                    <span class="health-badge red">Paused</span>
+                </div>
+                <p class="health-sub">The student chatbot is turned off in Portal Settings.</p>
+            </div>` : "";
+
         document.getElementById("system-health").innerHTML = `
             <div class="health-status">
                 <div class="status-header">
@@ -242,7 +268,9 @@ async function loadSystemHealth() {
                 <div class="progress-bar"><div class="fill ${indexClass}-fill" style="width:${data.vector_index_health}%"></div></div>
             </div>
 
+            ${chatOffBlock}
             ${geminiBlock}
+            ${dailyBlock}
 
             <div class="metric-row">
                 <span class="metric-label">Average Latency</span>

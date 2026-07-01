@@ -38,6 +38,23 @@ async function loadSettings() {
 
         setVal('rate-global-input', s.rate_limit_global_max_requests);
         setText('rate-global-val', s.rate_limit_global_max_requests);
+
+        setVal('rate-user-daily-input', s.rate_limit_user_daily_max);
+        setText('rate-user-daily-val', s.rate_limit_user_daily_max);
+
+        setVal('rate-global-daily-input', s.rate_limit_global_daily_max);
+        setText('rate-global-daily-val', s.rate_limit_global_daily_max);
+
+        // Kill switch: reflect the boolean as a checkbox + label.
+        const chatToggle = document.getElementById('chat-enabled-input');
+        const chatLabel = document.getElementById('chat-enabled-label');
+        if (chatToggle && s.chat_enabled != null) {
+            chatToggle.checked = !!s.chat_enabled;
+            if (chatLabel) chatLabel.textContent = chatToggle.checked ? 'Enabled' : 'Disabled';
+            chatToggle.onchange = () => {
+                if (chatLabel) chatLabel.textContent = chatToggle.checked ? 'Enabled' : 'Disabled';
+            };
+        }
     } catch (err) {
         console.error('Failed to load settings:', err);
     }
@@ -48,7 +65,10 @@ async function saveSettings() {
     const payload = {
         rate_limit_max_requests: parseInt(document.getElementById('rate-limit-input').value),
         rate_limit_window_seconds: parseInt(document.getElementById('rate-window-input').value),
-        rate_limit_global_max_requests: parseInt(document.getElementById('rate-global-input').value)
+        rate_limit_global_max_requests: parseInt(document.getElementById('rate-global-input').value),
+        rate_limit_user_daily_max: parseInt(document.getElementById('rate-user-daily-input').value),
+        rate_limit_global_daily_max: parseInt(document.getElementById('rate-global-daily-input').value),
+        chat_enabled: document.getElementById('chat-enabled-input').checked
     };
     try {
         await apiPut('/settings', payload);

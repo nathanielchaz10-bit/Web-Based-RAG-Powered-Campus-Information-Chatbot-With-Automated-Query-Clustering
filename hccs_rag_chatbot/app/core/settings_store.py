@@ -37,6 +37,21 @@ from app.core.config import settings
 from app.models.app_setting import AppSetting
 
 
+def _to_bool(raw: Any) -> bool:
+    """Caster for boolean settings (e.g. the chat kill switch).
+
+    Accepts real bools and the common string spellings, since values round-trip
+    through the DB as strings ("True"/"False")."""
+    if isinstance(raw, bool):
+        return raw
+    s = str(raw).strip().lower()
+    if s in ("true", "1", "yes", "on"):
+        return True
+    if s in ("false", "0", "no", "off"):
+        return False
+    raise ValueError("expected a boolean")
+
+
 @dataclass(frozen=True)
 class SettingSpec:
     key: str                       # public name used in the API/JSON + UI
@@ -92,7 +107,7 @@ _SPECS: dict[str, SettingSpec] = {
             minimum=5,
             maximum=3600,
         ),
-        # Server-wide ceiling across all students (protects the Gemini quota).
+        # Server-wide per-minute ceiling across all students (burst/quota guard).
         SettingSpec(
             "rate_limit_global_max_requests",
             int,
@@ -101,6 +116,35 @@ _SPECS: dict[str, SettingSpec] = {
             live=True,
             minimum=1,
             maximum=100000,
+        ),
+        # --- Daily budget caps (protect a fixed-dollar Gemini key over days) ---
+        # Per-student turns/day (0 disables).
+        SettingSpec(
+            "rate_limit_user_daily_max",
+            int,
+            settings.RATE_LIMIT_USER_DAILY_MAX,
+            attr="RATE_LIMIT_USER_DAILY_MAX",
+            live=True,
+            minimum=0,
+            maximum=100000,
+        ),
+        # Server-wide turns/day — the main budget protector (0 disables).
+        SettingSpec(
+            "rate_limit_global_daily_max",
+            int,
+            settings.RATE_LIMIT_GLOBAL_DAILY_MAX,
+            attr="RATE_LIMIT_GLOBAL_DAILY_MAX",
+            live=True,
+            minimum=0,
+            maximum=1000000,
+        ),
+        # Manual kill switch: False pauses the chatbot for everyone instantly.
+        SettingSpec(
+            "chat_enabled",
+            _to_bool,
+            settings.CHAT_ENABLED,
+            attr="CHAT_ENABLED",
+            live=True,
         ),
     ]
 }
