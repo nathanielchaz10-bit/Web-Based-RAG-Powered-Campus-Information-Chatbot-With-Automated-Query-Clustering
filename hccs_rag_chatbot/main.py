@@ -87,7 +87,17 @@ def _check_security_posture() -> None:
         raise RuntimeError(
             "Refusing to start: DEV_MODE is off but JWT_SECRET_KEY is still the "
             "default value. Generate a strong secret and set it in .env "
-            "(see DEPLOY.md). Anyone can forge admin tokens with the default key."
+            "(see DEPLOY.md). Anyone can forge admin tokens with the default key. "
+            "For local development, set DEV_MODE=True instead."
+        )
+    # A DEV_MODE=False deployment has NO admin unless one already exists in the DB
+    # or an email is allowlisted, so warn loudly rather than silently shipping an
+    # app nobody can administer.
+    if not settings.DEV_MODE and not settings.bootstrap_admin_emails:
+        print(
+            "[!] DEV_MODE is off and BOOTSTRAP_ADMIN_EMAILS is empty. No new Head "
+            "Admin can sign in; set BOOTSTRAP_ADMIN_EMAILS in .env unless an admin "
+            "already exists in the database."
         )
     if settings.DEV_MODE:
         # ASCII only: this prints to the Windows console (cp1252), which can't

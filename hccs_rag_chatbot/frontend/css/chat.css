@@ -165,6 +165,29 @@ body.light-theme .sidebar-header-box {
     margin-bottom: 24px;
 }
 
+/* Visible "back to admin" link, injected by chat.js only for admin/staff accounts.
+   Secondary (outlined) style so it reads as distinct from the primary New Chat.
+   The -12px top pulls it up under New Chat so the two group as a pair. */
+.admin-portal-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    background-color: transparent;
+    color: var(--text-sidebar);
+    border: 1px solid var(--border-light);
+    border-radius: 8px;
+    padding: 10px 16px;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background-color 0.2s;
+    margin-top: -12px;
+    margin-bottom: 24px;
+}
+.admin-portal-btn:hover { background-color: rgba(0, 0, 0, 0.15); }
+body.light-theme .admin-portal-btn:hover { background-color: rgba(0, 0, 0, 0.05); }
+
 .sidebar-menu { flex: 1; overflow-y: auto; }
 
 .menu-label {
@@ -308,6 +331,25 @@ body:not(.light-theme) .main-content {
 }
 
 .chat-header h2 { font-size: 15px; font-weight: 600; color: var(--text-primary); }
+
+/* --- GUEST BANNER (guest.html) --- */
+.guest-banner {
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-wrap: wrap;
+    gap: 6px 12px;
+    padding: 10px 16px;
+    border-bottom: 1px solid var(--border-light);
+    background-color: var(--bg-hover);
+    font-size: 13px;
+    color: var(--text-secondary);
+    z-index: 10;
+}
+.guest-banner-logo { width: 18px; height: 18px; object-fit: contain; }
+.guest-signin-link { color: var(--accent-blue); font-weight: 600; text-decoration: none; }
+.guest-signin-link:hover { text-decoration: underline; }
 
 .greeting-text {
     position: absolute;
@@ -483,6 +525,8 @@ body:not(.light-theme) .chat-header {
 }
 
 .suggested-chips { display: flex; gap: 8px; margin-top: 16px; flex-wrap: wrap; }
+/* FAQ starters sit under the centered greeting, so center them there too. */
+.faq-chips { justify-content: center; margin-top: 20px; }
 .suggestion-chip {
     background-color: var(--bg-chip); border: 1px solid var(--border-input);
     color: var(--text-primary); padding: 8px 14px; border-radius: 20px;
@@ -521,7 +565,10 @@ body:not(.light-theme) .chat-header {
 
 .popover-avatar-ring {
     width: 80px; height: 80px; border-radius: 50%;
-    background: conic-gradient(#ea4335 0deg 90deg, #4285f4 90deg 180deg, #34a853 180deg 270deg, #fbbc05 270deg 360deg);
+    /* Neutral ring. Was a Google 4-colour gradient that read as a "Google Pro"
+       badge, but login exposes no subscription status so we can't (and shouldn't)
+       imply it. Just a subtle frame for the avatar now. */
+    background: var(--border-light);
     display: flex; align-items: center; justify-content: center; margin-bottom: 16px;
 }
 .popover-avatar-inner { width: 72px; height: 72px; background-color: var(--bg-user-bubble); border-radius: 50%; border: 3px solid var(--bg-modal); display: flex; align-items: center; justify-content: center; }

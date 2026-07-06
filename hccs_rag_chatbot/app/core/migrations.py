@@ -71,12 +71,24 @@ def _add_chat_response_is_fallback(conn: Connection) -> bool:
     return True
 
 
+def _add_user_picture_url(conn: Connection) -> bool:
+    """user_accounts.picture_url: the Google profile photo URL, shown as the chat
+    avatar (falls back to an initial when null)."""
+    if _has_column(conn, "user_accounts", "picture_url"):
+        return False
+    conn.exec_driver_sql(
+        "ALTER TABLE user_accounts ADD COLUMN picture_url VARCHAR(512)"
+    )
+    return True
+
+
 # Ordered list of (description, migration_fn). Append new ones; never mutate
 # or remove existing entries.
 _MIGRATIONS = [
     ("add query_logs.resolved_query_text", _add_resolved_query_text),
     ("add documents extraction fields", _add_document_extraction_fields),
     ("add chat_responses.is_fallback", _add_chat_response_is_fallback),
+    ("add user_accounts.picture_url", _add_user_picture_url),
 ]
 
 

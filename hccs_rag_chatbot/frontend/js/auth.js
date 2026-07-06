@@ -17,6 +17,10 @@ document.addEventListener("DOMContentLoaded", () => {
         handleOAuthCallback();
         injectDevLogin();
     }
+
+    // On admin pages, fill the header profile (name / role / Google photo).
+    // No-op anywhere without a .profile-block (student chat, login page).
+    populateAdminProfile();
 });
 
 // --- CORE AUTH FUNCTIONS ---
@@ -117,6 +121,87 @@ async function requireAdmin() {
         return null;
     }
     return user;
+}
+
+// Populate the admin header's profile block (top-right) with the signed-in user:
+// real name, role, and Google profile photo. The block ships with placeholder
+// text ("Admin_Maria" / a person icon); this replaces it with the actual account.
+// Safe to call on every page — it no-ops where there's no .profile-block.
+async function populateAdminProfile() {
+    const block = document.querySelector(".profile-block");
+    if (!block || !getToken()) return;
+
+    let user;
+    try {
+        user = await apiGet("/api/auth/me");
+    } catch (err) {
+        return; // not signed in / unreachable — the page's own guard handles it
+    }
+
+    const nameEl = block.querySelector(".profile-text .role");
+    const roleEl = block.querySelector(".profile-text .portal");
+    if (nameEl) nameEl.textContent = user.display_name || user.email || "Admin";
+    if (roleEl) roleEl.textContent = user.role || "HCCS Portal";
+
+    // Swap the placeholder person icon for the Google photo when we have one.
+    // referrerpolicy=no-referrer: Google avatar URLs often 403 when a Referer is
+    // sent, which would show a broken image.
+    if (user.picture) {
+        const avatar = block.querySelector(".avatar-sm");
+        if (avatar) {
+            avatar.innerHTML = '<img src="' + user.picture + '" alt="Profile" referrerpolicy="no-referrer" style="width:100%;height:100%;border-radius:50%;object-fit:cover;">';
+        }
+    }
+
+    wireProfileMenu(block, user);
+}
+
+// Turn the header profile block into a click-to-open account menu whose job is
+// Sign out — replacing the logout button that used to sit loose in the sidebar.
+// Closes on outside-click or Escape. Idempotent per block.
+function wireProfileMenu(block, user) {
+    if (block.dataset.menuWired) return;
+    block.dataset.menuWired = "1";
+
+    const menu = document.createElement("div");
+    menu.className = "profile-menu hidden";
+    menu.setAttribute("role", "menu");
+    menu.innerHTML =
+        '<div class="profile-menu-head">' +
+            '<span class="profile-menu-name"></span>' +
+            '<span class="profile-menu-email"></span>' +
+        '</div>' +
+        '<button class="profile-menu-item" type="button" role="menuitem">' +
+            '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path><polyline points="16 17 21 12 16 7"></polyline><line x1="21" y1="12" x2="9" y2="12"></line></svg>' +
+            'Sign out' +
+        '</button>';
+    // User-controlled text set via textContent (never innerHTML) — no XSS.
+    menu.querySelector(".profile-menu-name").textContent = user.display_name || "Admin";
+    menu.querySelector(".profile-menu-email").textContent = user.email || "";
+    block.appendChild(menu);
+
+    block.setAttribute("role", "button");
+    block.setAttribute("tabindex", "0");
+    block.setAttribute("aria-haspopup", "menu");
+    block.setAttribute("aria-expanded", "false");
+
+    const setOpen = (open) => {
+        menu.classList.toggle("hidden", !open);
+        block.setAttribute("aria-expanded", open ? "true" : "false");
+    };
+
+    block.addEventListener("click", (e) => {
+        if (menu.contains(e.target)) return;   // clicks inside the menu don't toggle it
+        setOpen(menu.classList.contains("hidden"));
+    });
+    block.addEventListener("keydown", (e) => {
+        if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setOpen(menu.classList.contains("hidden")); }
+        else if (e.key === "Escape") setOpen(false);
+    });
+    menu.querySelector(".profile-menu-item").addEventListener("click", () => logout());
+    document.addEventListener("click", (e) => {
+        if (!block.contains(e.target)) setOpen(false);
+    });
 }
 
 // --- DEV LOGIN (local testing without Google OAuth) ---

@@ -14,6 +14,10 @@ class UserAccount(Base):
     google_id = Column(String(255), unique=True, nullable=False, index=True)
     email = Column(String(255), unique=True, nullable=False, index=True)
     display_name = Column(String(255), nullable=False)
+    # Google profile photo URL (from the OAuth "profile" scope), shown as the chat
+    # avatar. Nullable: dev/pre-provisioned accounts have none and fall back to an
+    # initial.
+    picture_url = Column(String(512), nullable=True)
 
     # Role and status
     role_id = Column(

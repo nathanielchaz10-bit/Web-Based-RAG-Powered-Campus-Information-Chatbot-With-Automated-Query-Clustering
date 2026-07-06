@@ -14,10 +14,12 @@ def get_google_auth_url(state: str | None = None) -> str:
         "response_type": "code",
         "scope": "openid email profile",
         "access_type": "offline",
-        # Show only the school domain in Google's account chooser. This is a UX
-        # nudge, NOT a security control — `hd` can be omitted/altered by the
-        # client, so the callback still verifies the email domain server-side.
-        "hd": settings.HCCS_DOMAIN,
+        # NOTE: we intentionally do NOT send `hd` (hosted-domain). `hd` restricts
+        # Google's account chooser to one domain, which would hide the developer/
+        # owner accounts allowlisted via BOOTSTRAP_ADMIN_EMAILS (usually personal
+        # Gmail) — they'd never even appear to sign in. Who may actually sign in is
+        # enforced server-side in the callback, so the chooser can list every
+        # account safely.
         # Always present the account chooser instead of silently reusing an
         # existing Google session. On a shared computer this stops one student
         # being auto-logged-in as whoever used the browser before, and makes the

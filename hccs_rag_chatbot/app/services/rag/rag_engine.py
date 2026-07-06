@@ -144,6 +144,36 @@ class HistoryAwareRagChain:
         return result
 
 
+# The QA instruction shared by the authenticated pipeline and the restricted
+# guest path, so both answer with the same voice and emit the same NO_ANSWER
+# sentinel when the retrieved context doesn't contain the answer.
+QA_SYSTEM_PROMPT = (
+    "You are a helpful assistant for Holy Child Catholic School students. "
+    "Use the following pieces of retrieved context to answer the question. "
+    "If the answer is not contained in the context, reply with EXACTLY "
+    + NO_ANSWER_SENTINEL +
+    " and nothing else; do not apologize, translate, or explain. "
+    "Context: {context}"
+)
+
+
+def build_llm():
+    """The chat LLM used across the RAG paths."""
+    return ChatGoogleGenerativeAI(
+        model=settings.LLM_MODEL, temperature=settings.RAG_TEMPERATURE
+    )
+
+
+def build_answer_chain(llm):
+    """Stuff-documents QA chain: takes context + input (+ chat_history) -> answer."""
+    qa_prompt = ChatPromptTemplate.from_messages([
+        ("system", QA_SYSTEM_PROMPT),
+        MessagesPlaceholder("chat_history"),
+        ("human", "{input}"),
+    ])
+    return create_stuff_documents_chain(llm, qa_prompt)
+
+
 def load_documents_from_folder(folder_path):
     """Build LangChain Documents for every supported file under ``folder_path``.
 
@@ -268,8 +298,8 @@ def run_rag_pipeline():
     retriever = vectorstore.as_retriever(search_kwargs={"k": 5})
 
     # 6. set up the LLM and prompt
-    llm = ChatGoogleGenerativeAI(model="gemini-2.5-flash", temperature=0)
-    
+    llm = build_llm()
+
     # para matandaan ng AI previous messages and use them as context, need to "contextualize" the question first.
     # prompt para sa AI mismo
     contextualize_q_system_prompt = (
@@ -290,22 +320,7 @@ def run_rag_pipeline():
     contextualize_chain = contextualize_q_prompt | llm | StrOutputParser()
 
     # 7. build chains
-    qa_system_prompt = (
-        "You are a helpful assistant for Holy Child Catholic School students. "
-        "Use the following pieces of retrieved context to answer the question. "
-        "If the answer is not contained in the context, reply with EXACTLY "
-        + NO_ANSWER_SENTINEL +
-        " and nothing else; do not apologize, translate, or explain. "
-        "Context: {context}"
-    )
-
-    qa_prompt = ChatPromptTemplate.from_messages([
-        ("system", qa_system_prompt),
-        MessagesPlaceholder("chat_history"),
-        ("human", "{input}"),
-    ])
-
-    question_answer_chain = create_stuff_documents_chain(llm, qa_prompt)
+    question_answer_chain = build_answer_chain(llm)
 
     if settings.RAG_FUSION_ENABLED:
         # RAG-Fusion path. ONE LLM call resolves history, normalizes

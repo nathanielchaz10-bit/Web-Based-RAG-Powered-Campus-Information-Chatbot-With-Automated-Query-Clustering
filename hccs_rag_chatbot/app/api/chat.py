@@ -12,11 +12,12 @@ import json
 import traceback
 from datetime import datetime
 
-from fastapi import APIRouter, Depends, HTTPException
-from pydantic import BaseModel
+from fastapi import APIRouter, Depends, HTTPException, Request
+from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
-from app.api.deps import enforce_chat_rate_limit, get_current_user
+from app.api.deps import enforce_chat_rate_limit, enforce_guest_rate_limit, get_current_user
+from app.core.config import settings
 from app.core.database import get_db
 from app.models.chat_session import ChatSession
 from app.models.chat_response import ChatResponse
@@ -50,7 +51,9 @@ def _classify(message: str) -> tuple[str | None, str | None]:
 
 
 class ChatRequest(BaseModel):
-    message: str
+    # max_length bounds per-turn Gemini cost + DB storage; the handler's strip()
+    # check still owns the empty-message case (422 vs the nicer 400).
+    message: str = Field(max_length=2000)
     session_id: int | None = None
 
 
@@ -59,6 +62,16 @@ class ChatResponseOut(BaseModel):
     sources: list[str]
     session_id: int
     query_id: int
+    response_time_ms: int
+
+
+class GuestChatRequest(BaseModel):
+    message: str = Field(max_length=2000)
+
+
+class GuestChatResponseOut(BaseModel):
+    answer: str
+    sources: list[str]
     response_time_ms: int
 
 
@@ -119,9 +132,11 @@ def chat(
         print(f"history turns fed to retriever: {len(history)}")
         print("=== end traceback ===\n")
         # Most likely: missing GEMINI_API_KEY or no documents to index yet.
+        # Keep the real cause in the server log above; never leak {exc} (paths,
+        # keys, internals) to the client.
         raise HTTPException(
             status_code=503,
-            detail=f"The assistant is not available right now: {exc}",
+            detail="The assistant is not available right now. Please try again in a moment.",
         )
 
     sentiment, detected_intent = _classify(message)
@@ -182,6 +197,93 @@ def chat(
         sources=result["sources"],
         session_id=session.session_id,
         query_id=query.query_id,
+        response_time_ms=result["response_time_ms"],
+    )
+
+
+@router.post("/guest", response_model=GuestChatResponseOut)
+def guest_chat(
+    payload: GuestChatRequest,
+    request: Request,
+    db: Session = Depends(get_db),
+    _: None = Depends(enforce_guest_rate_limit),
+):
+    """Anonymous chat for visitors without an @hccs.edu.ph account.
+
+    Restricted to the guest-visible document categories (see
+    settings.guest_document_types) via a metadata-filtered retrieval, and
+    stateless -- no ChatSession, so guests share no history. The turn is still
+    logged to QueryLog (session_id NULL) so it counts toward the daily budget cap
+    and feeds the dashboards/clustering like any other query.
+    """
+    message = (payload.message or "").strip()
+    if not message:
+        raise HTTPException(status_code=400, detail="Message cannot be empty.")
+
+    allowed_ids = [
+        row[0]
+        for row in db.query(Document.document_id)
+        .filter(
+            Document.is_active.is_(True),
+            Document.document_type.in_(settings.guest_document_types),
+        )
+        .all()
+    ]
+
+    try:
+        result = rag_service.answer_query_restricted(message, allowed_ids)
+    except Exception as exc:
+        print("\n=== /chat/guest failed — full traceback ===")
+        traceback.print_exc()
+        print("=== end traceback ===\n")
+        raise HTTPException(
+            status_code=503,
+            detail="The assistant is not available right now. Please try again in a moment.",
+        )
+
+    sentiment, detected_intent = _classify(message)
+
+    query = QueryLog(
+        query_text=message,
+        session_id=None,  # anonymous guest: no session
+        timestamp=datetime.utcnow(),
+        response_time_ms=result["response_time_ms"],
+        is_valid=True,
+        sentiment=sentiment,
+        detected_intent=detected_intent,
+    )
+    db.add(query)
+    db.flush()
+
+    db.add(ChatResponse(
+        query_id=query.query_id,
+        response_text=result["answer"],
+        source_chunks=json.dumps(result["sources"]),
+        is_fallback=result.get("is_fallback", False),
+        generated_at=datetime.utcnow(),
+    ))
+
+    # Same best-effort document-usage logging as the authenticated path.
+    try:
+        retrieved_ids = result.get("retrieved_document_ids") or []
+        if retrieved_ids:
+            valid_ids = {
+                row[0]
+                for row in db.query(Document.document_id)
+                .filter(Document.document_id.in_(retrieved_ids))
+                .all()
+            }
+            now = datetime.utcnow()
+            for did in valid_ids:
+                db.add(DocumentRetrieval(document_id=did, retrieved_at=now))
+    except Exception:
+        pass
+
+    db.commit()
+
+    return GuestChatResponseOut(
+        answer=result["answer"],
+        sources=result["sources"],
         response_time_ms=result["response_time_ms"],
     )
 

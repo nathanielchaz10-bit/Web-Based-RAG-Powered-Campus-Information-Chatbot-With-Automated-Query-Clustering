@@ -25,6 +25,27 @@ class Settings(BaseSettings):
     GOOGLE_REDIRECT_URI: str = "http://localhost:8000/api/auth/callback"
     HCCS_DOMAIN: str = "hccs.edu.ph"
 
+    # Developer/owner emails granted Head Admin on real Google sign-in AND allowed
+    # past the @HCCS_DOMAIN gate — so the maintainers' personal accounts can
+    # administer a DEV_MODE=False deployment without the dev bypass. Comma-
+    # separated, case-insensitive. On a fresh deployment this is the ONLY way a
+    # Head Admin comes to exist, so set at least one before going live.
+    BOOTSTRAP_ADMIN_EMAILS: str = ""
+
+    @property
+    def bootstrap_admin_emails(self) -> set[str]:
+        return {e.strip().lower() for e in self.BOOTSTRAP_ADMIN_EMAILS.split(",") if e.strip()}
+
+    # --- Guest mode ---------------------------------------------------------
+    # Visitors without an @hccs.edu.ph account get a restricted chatbot that
+    # answers ONLY from these document categories (see chat.py:/chat/guest).
+    # Comma-separated Document.document_type values.
+    GUEST_DOCUMENT_TYPES: str = "ENROLLMENT,FINANCIAL"
+
+    @property
+    def guest_document_types(self) -> set[str]:
+        return {t.strip().upper() for t in self.GUEST_DOCUMENT_TYPES.split(",") if t.strip()}
+
     # --- Gemini / LLM -------------------------------------------------------
     GEMINI_API_KEY: str = ""
     EMBEDDING_MODEL: str = "gemini-embedding-001"
@@ -177,9 +198,13 @@ class Settings(BaseSettings):
     CLUSTERING_LLM_MAX_ITEMS: int = 400
 
     # --- Development Mode ----------------------------------------------------
-    # True during development/demo: enables the dev-login bypass and relaxes the
-    # HCCS domain restriction. Set False in production.
-    DEV_MODE: bool = True
+    # Opt-in, and OFF by default so a misconfigured/absent .env fails SAFE rather
+    # than wide open. While True: a request with no/invalid token is treated as
+    # Head Admin, /api/auth/dev-login mints admin tokens with no password, and the
+    # HCCS domain restriction is relaxed. Set DEV_MODE=True in a LOCAL .env for
+    # OAuth-free testing; never set it on the public deployment. Real admin access
+    # in production comes from BOOTSTRAP_ADMIN_EMAILS above.
+    DEV_MODE: bool = False
 
     # Look for .env in BOTH the repo root and the app root (hccs_rag_chatbot/),
     # since the app is launched from inside hccs_rag_chatbot/ and a .env is just

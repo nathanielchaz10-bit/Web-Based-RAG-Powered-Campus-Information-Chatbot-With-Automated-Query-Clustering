@@ -10,8 +10,13 @@ import os
 import time
 
 import app.services._engine_bootstrap  # noqa: F401  (side effect: bridges GOOGLE_API_KEY)
+from app.core.config import settings
 
 _rag_chain = None
+# Guest path caches: a stuff-documents QA chain (corpus-independent) and the
+# vector store handle (dropped on reset_chain() so re-indexing is picked up).
+_guest_answer_chain = None
+_guest_vectorstore = None
 
 
 def get_rag_chain():
@@ -39,8 +44,9 @@ def reset_chain() -> None:
     chat path reloads the Chroma collection and sees the new/removed chunks
     without a process restart.
     """
-    global _rag_chain
+    global _rag_chain, _guest_vectorstore
     _rag_chain = None
+    _guest_vectorstore = None
 
 
 def _extract_sources(context_docs) -> list[str]:
@@ -121,4 +127,66 @@ def answer_query(question: str, chat_history: list[tuple[str, str]] | None = Non
         "response_time_ms": response_time_ms,
         "num_context_docs": len(context_docs),
         "resolved_question": resolved_question,
+    }
+
+
+def _get_guest_answer_chain():
+    global _guest_answer_chain
+    if _guest_answer_chain is None:
+        from app.services.rag.rag_engine import build_answer_chain, build_llm
+        _guest_answer_chain = build_answer_chain(build_llm())
+    return _guest_answer_chain
+
+
+def _get_guest_vectorstore():
+    global _guest_vectorstore
+    if _guest_vectorstore is None:
+        from app.services.rag.indexer import get_vectorstore
+        _guest_vectorstore = get_vectorstore()
+    return _guest_vectorstore
+
+
+def answer_query_restricted(question: str, allowed_document_ids) -> dict:
+    """Answer a guest question using ONLY chunks from ``allowed_document_ids``.
+
+    Stateless (no chat history) single-query retrieval with a Chroma metadata
+    filter on document_id, then the same QA prompt/NO_ANSWER sentinel the
+    authenticated path uses. Returns the same shape as ``answer_query`` minus the
+    resolved-question field.
+
+    ponytail: single-query retrieval, no RAG-Fusion/history rewrite -- guests are
+    anonymous and one-shot, so the extra Gemini calls those add aren't worth it.
+    """
+    from app.services.rag.rag_engine import FALLBACK_MESSAGE, is_no_answer
+
+    ids = [int(i) for i in (allowed_document_ids or [])]
+    if not ids:
+        # No guest-visible documents configured/active -> nothing to answer from.
+        return {
+            "answer": FALLBACK_MESSAGE, "is_fallback": True, "sources": [],
+            "retrieved_document_ids": [], "response_time_ms": 0, "num_context_docs": 0,
+        }
+
+    start = time.perf_counter()
+    context_docs = _get_guest_vectorstore().similarity_search(
+        question,
+        k=settings.TOP_K_CHUNKS,
+        filter={"document_id": {"$in": ids}},
+    )
+    answer = _get_guest_answer_chain().invoke(
+        {"input": question, "chat_history": [], "context": context_docs}
+    )
+    response_time_ms = int((time.perf_counter() - start) * 1000)
+
+    is_fallback = is_no_answer(answer)
+    if is_fallback:
+        answer = FALLBACK_MESSAGE
+
+    return {
+        "answer": answer,
+        "is_fallback": is_fallback,
+        "sources": [] if is_fallback else _extract_sources(context_docs),
+        "retrieved_document_ids": [] if is_fallback else _retrieved_document_ids(context_docs),
+        "response_time_ms": response_time_ms,
+        "num_context_docs": len(context_docs),
     }

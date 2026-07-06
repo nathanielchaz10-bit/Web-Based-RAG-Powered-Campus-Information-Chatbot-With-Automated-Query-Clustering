@@ -5,7 +5,7 @@ import numpy as np
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
-from app.api.deps import get_current_user, require_admin
+from app.api.deps import require_admin
 from app.core.database import get_db
 from app.models.cluster import Cluster
 from app.models.cluster_keyword import ClusterKeyword
@@ -113,7 +113,7 @@ def _build_overview(db: Session) -> dict:
 @router.get("/overview")
 def clusters_overview(
     db: Session = Depends(get_db),
-    user: UserAccount = Depends(get_current_user),
+    user: UserAccount = Depends(require_admin),
 ):
     return _build_overview(db)
 
@@ -144,7 +144,7 @@ def run_clustering_endpoint(
 @router.get("/")
 def list_clusters(
     db: Session = Depends(get_db),
-    user: UserAccount = Depends(get_current_user),
+    user: UserAccount = Depends(require_admin),
 ):
     latest_run = (
         db.query(ClusteringRun)
@@ -204,7 +204,7 @@ def _cosine_similarity(a, b):
 def cluster_queries(
     cluster_id: int,
     db: Session = Depends(get_db),
-    user: UserAccount = Depends(get_current_user),
+    user: UserAccount = Depends(require_admin),
 ):
     """Raw queries assigned to a cluster, newest first.
 
@@ -283,7 +283,7 @@ def _sentiment_bucket_of(label: str) -> str:
 def sentiment_queries(
     bucket: str,
     db: Session = Depends(get_db),
-    user: UserAccount = Depends(get_current_user),
+    user: UserAccount = Depends(require_admin),
 ):
     """Queries belonging to one sentiment bucket (positive/neutral/urgent).
 

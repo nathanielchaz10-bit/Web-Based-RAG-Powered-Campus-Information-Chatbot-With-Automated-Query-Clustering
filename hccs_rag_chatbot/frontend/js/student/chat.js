@@ -79,7 +79,10 @@ document.addEventListener("DOMContentLoaded", async () => {
 
             if (profilePictureUrl) {
                 // If a Google picture exists, inject the <img> tag
-                const imgTag = `<img src="${profilePictureUrl}" alt="Profile" style="width: 100%; height: 100%; border-radius: 50%; object-fit: cover;">`;
+                // referrerpolicy=no-referrer: Google's lh3.googleusercontent.com
+                // avatars often 403 when a Referer is sent, which would show a
+                // broken image. Suppressing the referrer makes them load reliably.
+                const imgTag = `<img src="${profilePictureUrl}" alt="Profile" referrerpolicy="no-referrer" style="width: 100%; height: 100%; border-radius: 50%; object-fit: cover;">`;
 
                 if (sidebarAvatarContainer) {
                     sidebarAvatarContainer.innerHTML = `${imgTag}<span class="status-dot"></span>`;
@@ -102,8 +105,21 @@ document.addEventListener("DOMContentLoaded", async () => {
         console.error("Profile fetch failed:", err);
     }
 
+    // Admins/staff can use the chatbot too; give them a VISIBLE one-click way back
+    // to the admin portal, right under New Chat. Injected only for admin roles —
+    // students never see it.
+    const ADMIN_ROLES = ["Head Admin", "Registrar", "Finance Officer"];
+    if (currentUser && ADMIN_ROLES.includes(currentUser.role) && newChatBtn) {
+        const portalBtn = document.createElement("button");
+        portalBtn.className = "admin-portal-btn";
+        portalBtn.innerHTML = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="19" y1="12" x2="5" y2="12"></line><polyline points="12 19 5 12 12 5"></polyline></svg> Admin Portal';
+        portalBtn.addEventListener("click", () => { window.location.href = "/frontend/admin/dashboard.html"; });
+        newChatBtn.insertAdjacentElement("afterend", portalBtn);
+    }
+
     // Load initial sidebar history
     await loadSidebarHistory();
+    renderGreetingFaqs();
 
     // 2. Chat UI Functions
     function resetChatUI() {
@@ -112,7 +128,19 @@ document.addEventListener("DOMContentLoaded", async () => {
         chatHistory.classList.add("hidden");
         if (chatHeader) chatHeader.classList.add("hidden");
         if (greeting) greeting.style.display = "block";
+        renderGreetingFaqs();
         document.querySelectorAll(".history-list li").forEach(li => li.classList.remove("active"));
+    }
+
+    // Hand-picked FAQ starters on the empty greeting so a new user has somewhere
+    // to begin. Clicking one sends it; they can still type their own question.
+    function renderGreetingFaqs() {
+        if (!greeting || typeof renderFaqChips !== "function") return;
+        const faqs = typeof STUDENT_FAQS !== "undefined" ? STUDENT_FAQS : [];
+        renderFaqChips(greeting, faqs, (q) => {
+            chatInput.value = q;
+            handleSend();
+        });
     }
 
     function revealHistory() {
@@ -237,10 +265,6 @@ document.addEventListener("DOMContentLoaded", async () => {
 
         revealHistory();
 
-        // Remove old onboarding tip if it exists
-        const oldTip = document.querySelector(".onboarding-tip");
-        if (oldTip) oldTip.remove();
-
         // Print User Message
         addBubble("user", text);
 
@@ -310,14 +334,6 @@ document.addEventListener("DOMContentLoaded", async () => {
 
             if (!sessions || sessions.length === 0) {
                  historyList.innerHTML = `<li style="color:#64748b; cursor:default; pointer-events:none;">No recent chats</li>`;
-
-                 // Show onboarding tip if there is no history and the chat is empty
-                 if (chatHistory.children.length === 0 && greeting && greeting.style.display !== "none") {
-                     const tip = document.createElement("div");
-                     tip.className = "onboarding-tip";
-                     tip.innerHTML = "<strong>💡 Tip:</strong> Try asking about 'Tuition Fees', 'Enrollment Requirements', or 'Library Hours'.";
-                     greeting.appendChild(tip);
-                 }
                  return;
             }
 

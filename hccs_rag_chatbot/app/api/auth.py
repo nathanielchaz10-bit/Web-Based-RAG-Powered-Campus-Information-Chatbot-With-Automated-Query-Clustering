@@ -94,10 +94,18 @@ async def callback(
     # rare string form ("true"), and a missing key safely becomes False.
     email_verified = str(user_info.get("email_verified")).lower() == "true"
 
+    # Developer/owner allowlist (settings.BOOTSTRAP_ADMIN_EMAILS): these emails may
+    # sign in even off the school domain and are provisioned as Head Admin below.
+    # This is how the maintainers administer a DEV_MODE=False deployment.
+    is_bootstrap_admin = bool(email) and email.lower() in settings.bootstrap_admin_emails
+
     # School-only gate. Because the app is published as External, Google lets ANY
-    # account reach this callback, so this is the sole wall: accept only a
-    # VERIFIED email on the school domain. (Skipped in DEV_MODE for local testing.)
-    if not settings.DEV_MODE and not (email_verified and is_valid_hccs_domain(email)):
+    # account reach this callback, so this is the sole wall: accept only a VERIFIED
+    # email that is on the school domain OR on the developer allowlist. (Skipped in
+    # DEV_MODE for local testing.)
+    if not settings.DEV_MODE and not (
+        email_verified and (is_valid_hccs_domain(email) or is_bootstrap_admin)
+    ):
         db.add(AuthenticationLog(
             event_type="FAILED", timestamp=datetime.utcnow(),
             ip_address="unknown", status="Invalid domain",
@@ -108,12 +116,15 @@ async def callback(
     ensure_roles(db)
     user = db.query(UserAccount).filter_by(email=email).first()
     if not user:
-        student_role = db.query(Role).filter_by(role_name="Student").first()
+        # Allowlisted developers bootstrap straight to Head Admin; everyone else
+        # starts as a Student.
+        default_role = "Head Admin" if is_bootstrap_admin else "Student"
+        role_row = db.query(Role).filter_by(role_name=default_role).first()
         user = UserAccount(
             google_id=user_info["sub"],
             email=email,
             display_name=user_info.get("name", email),
-            role_id=student_role.role_id,
+            role_id=role_row.role_id,
         )
         db.add(user)
         db.commit()
@@ -132,7 +143,16 @@ async def callback(
         if (user.google_id or "").startswith("pending:"):
             user.google_id = user_info["sub"]
             user.display_name = user_info.get("name", user.display_name)
+        # Keep allowlisted developers at Head Admin even if their row predates the
+        # allowlist (e.g. it was created as a Student on an earlier sign-in).
+        if is_bootstrap_admin and (not user.role or user.role.role_name != "Head Admin"):
+            head_role = db.query(Role).filter_by(role_name="Head Admin").first()
+            if head_role:
+                user.role_id = head_role.role_id
 
+    # Refresh the Google profile photo on every sign-in (it can change, and this
+    # backfills accounts created before the column existed).
+    user.picture_url = user_info.get("picture")
     user.last_active = datetime.utcnow()
     db.add(AuthenticationLog(
         user_id=user.user_id, event_type="LOGIN",
@@ -199,6 +219,7 @@ def me(user: UserAccount = Depends(get_current_user)):
         "email": user.email,
         "display_name": user.display_name,
         "role": user.role.role_name if user.role else None,
+        "picture": user.picture_url,
     }
 
 

@@ -149,7 +149,52 @@ body {
     gap: 12px;
     padding-left: 20px;
     border-left: 1px solid #e2e8f0;
+    position: relative;   /* anchor for the click-to-open account menu */
+    cursor: pointer;
 }
+
+/* Click-to-open account menu anchored to the header profile (built in auth.js).
+   Holds the Sign out action, which used to sit loose in the sidebar. */
+.profile-menu {
+    position: absolute;
+    top: calc(100% + 10px);
+    right: 0;
+    min-width: 210px;
+    background: #ffffff;
+    border: 1px solid #e2e8f0;
+    border-radius: 12px;
+    box-shadow: 0 12px 32px rgba(15, 23, 42, 0.14);
+    padding: 8px;
+    z-index: 100;
+    cursor: default;
+}
+.profile-menu.hidden { display: none; }
+.profile-menu-head {
+    display: flex;
+    flex-direction: column;
+    padding: 8px 12px 12px;
+    margin-bottom: 6px;
+    border-bottom: 1px solid #f1f5f9;
+    text-align: left;
+}
+.profile-menu-name { font-size: 14px; font-weight: 600; color: #1e293b; }
+.profile-menu-email { font-size: 12px; color: #64748b; word-break: break-all; }
+.profile-menu-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    width: 100%;
+    padding: 10px 12px;
+    border: none;
+    background: transparent;
+    border-radius: 8px;
+    font-size: 14px;
+    font-weight: 500;
+    color: #b91c1c;
+    text-align: left;
+    cursor: pointer;
+}
+.profile-menu-item:hover { background: #fef2f2; }
 
 .profile-text {
     display: flex;
@@ -1182,3 +1227,108 @@ input[type="range"]::-webkit-slider-thumb {
 .notif-title { margin: 0; font-size: 13px; font-weight: 600; color: #1e293b; line-height: 1.35; }
 .notif-msg { margin: 2px 0 0; font-size: 12px; color: #64748b; line-height: 1.4; }
 .notif-time { display: inline-block; margin-top: 4px; font-size: 11px; color: #94a3b8; }
+
+/* ==========================================================================
+   MOBILE / TABLET  (<= 768px)
+   The admin portal was desktop-only (no @media rules): a fixed 260px sidebar,
+   4-col KPI grid and 2-col chart grid all overflow a phone. This reflows the
+   shared chrome so every admin page — dashboard included — is usable on a phone.
+   Pure CSS on purpose: no per-page hamburger/JS, so it can't leave any page
+   with an unreachable sidebar.
+   ========================================================================== */
+@media (max-width: 768px) {
+    /* Let the page scroll naturally instead of the desktop's nested scrollers. */
+    body { overflow: auto; overflow-x: hidden; }
+    .admin-layout { flex-direction: column; height: auto; min-height: 100vh; width: 100%; }
+    .admin-main {
+        height: auto;
+        overflow: visible;
+        border-radius: 0;      /* the rounded-left corner only makes sense beside a sidebar */
+        box-shadow: none;
+    }
+    .content-wrapper { overflow: visible; padding: 16px; }
+
+    /* Sidebar -> sticky horizontal tab strip. Nav labels stay visible and scroll
+       sideways if they don't all fit; logout stays pinned at the end. */
+    .admin-sidebar {
+        flex-direction: row;
+        align-items: stretch;
+        width: 100%;
+        height: auto;
+        overflow: visible;
+        position: sticky;
+        top: 0;
+        z-index: 50;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.25);
+    }
+    .sidebar-brand { display: none; }
+    .sidebar-nav {
+        flex-direction: row;
+        flex: 1;
+        gap: 0;
+        padding: 0;
+        overflow-x: auto;
+        scrollbar-width: none;               /* hide the strip's scrollbar (Firefox) */
+    }
+    .sidebar-nav::-webkit-scrollbar { display: none; }
+    .nav-item {
+        padding: 14px 16px;
+        white-space: nowrap;
+        border-left: 0;
+        border-bottom: 3px solid transparent;   /* move the active accent to the bottom edge */
+    }
+    .nav-item.active { border-left: 0; border-bottom-color: #60a5fa; }
+    .sidebar-footer { flex-shrink: 0; border-top: 0; padding: 0; display: flex; }
+    .sidebar-footer .nav-item { border-bottom: 3px solid transparent; }
+
+    /* Header on one compact row: search flexes, profile shrinks to its avatar. */
+    .top-header { height: auto; padding: 12px 16px; gap: 12px; }
+    .search-bar { width: auto; flex: 1; min-width: 0; }
+    .profile-block { padding-left: 12px; }
+    .profile-block .profile-text { display: none; }
+
+    /* Stack the grids. */
+    .kpi-grid { grid-template-columns: repeat(2, 1fr); gap: 12px; }
+    .dashboard-grid { grid-template-columns: 1fr; }
+    .card { padding: 16px; }
+    .chart-container { height: 260px; }
+
+    /* Let the wide table scroll sideways (it's already in .table-responsive)
+       instead of squishing 5 columns and wrapping the timestamp char-by-char. */
+    .admin-table { min-width: 600px; }
+    .admin-table th:first-child,
+    .admin-table td:first-child { white-space: nowrap; }
+
+    /* --- Query Clusters / Document Directory / Settings: stack their grids --- */
+    /* Page header (title + action buttons) stacks instead of squeezing. */
+    .page-header-flex { flex-direction: column; gap: 12px; }
+    .header-buttons { flex-wrap: wrap; }
+
+    /* Every multi-column content grid on these pages collapses to one column. */
+    .cluster-top-grid,
+    .cluster-cards-grid,
+    .doc-directory-grid,
+    .doc-metrics-grid,
+    .settings-grid,
+    .form-row,
+    .ai-config-grid { grid-template-columns: 1fr; }
+
+    /* The document list uses a desktop-height inner scroller; on a phone let it
+       flow with the page instead of trapping content in a stubby scroll box. */
+    .doc-scroll-area { max-height: none; overflow: visible; padding-right: 0; }
+
+    /* Footer: stack its two halves rather than forcing them onto one row. */
+    .admin-footer { flex-direction: column; gap: 12px; align-items: flex-start; padding: 16px; }
+    .status-indicators { flex-wrap: wrap; gap: 12px; }
+
+    /* Keep dialogs inside the viewport. */
+    .modal-content,
+    .modal-content.modal-sm,
+    .wide-modal,
+    .ui-modal-content.wide-modal { width: 95vw; max-width: 95vw; }
+}
+
+/* Phones: one KPI card per row so the numbers stay legible. */
+@media (max-width: 480px) {
+    .kpi-grid { grid-template-columns: 1fr; }
+}

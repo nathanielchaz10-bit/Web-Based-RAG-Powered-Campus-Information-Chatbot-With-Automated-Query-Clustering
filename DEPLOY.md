@@ -49,6 +49,11 @@ GOOGLE_CLIENT_SECRET=<your client secret>
 # School domain stays enforced (students use @hccs.edu.ph Workspace accounts).
 HCCS_DOMAIN=hccs.edu.ph
 
+# YOUR admin access: comma-separated emails that become Head Admin on Google
+# sign-in and may log in even off the school domain. On a fresh deployment this is
+# the ONLY way a Head Admin exists — set at least your own email here.
+BOOTSTRAP_ADMIN_EMAILS=you@gmail.com,teammate@gmail.com
+
 # Set AFTER Step 4, when you know your tunnel URL. Must match Google exactly.
 GOOGLE_REDIRECT_URI=https://<your-tunnel-host>/api/auth/callback
 CORS_ALLOW_ORIGINS=https://<your-tunnel-host>
@@ -101,8 +106,10 @@ You'll get `<your-tunnel-host>` from Step 4.
 > check is the *only* thing keeping outside accounts out. If `DEV_MODE` were left
 > on, the check is skipped and **any** Google account could log in (as Head
 > Admin). The app's startup guardrail refuses to boot insecurely, but double-check
-> the banner doesn't appear. The login screen also nudges users toward the school
-> domain (the `hd` hint), though the server-side check is what actually enforces it.
+> the banner doesn't appear. The Google account chooser lists all of a user's
+> accounts (we don't send the `hd` domain hint, so allowlisted developer Gmail
+> accounts can sign in) — the server-side check enforces school-only access for
+> everyone else.
 
 ---
 
@@ -167,6 +174,8 @@ Open the tunnel URL in a fresh/incognito window and verify:
       not back into the chat.
 - [ ] Visiting an admin URL (e.g. `/frontend/admin/dashboard.html`) while logged
       out (or as a student) redirects to login — it does **not** show admin data.
+- [ ] Signing in with an email listed in `BOOTSTRAP_ADMIN_EMAILS` lands you in the
+      admin portal as **Head Admin** (this is how you administer the live app).
 - [ ] In Portal Settings, flip **Chatbot Availability** off → students immediately
       get "temporarily unavailable"; flip it back on.
 

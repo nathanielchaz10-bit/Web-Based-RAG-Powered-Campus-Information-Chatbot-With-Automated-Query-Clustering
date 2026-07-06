@@ -1,13 +1,14 @@
 """Shared API dependencies: auth + role guards.
 
-DEV_MODE behaviour (default on): if a request arrives without a valid token,
-the dependency falls back to a seeded local "Head Admin" dev user instead of
-rejecting it. This lets the whole app (chat, clustering, dashboards) be exercised
-locally without standing up Google OAuth. Set DEV_MODE=False to enforce real
-authentication.
+DEV_MODE behaviour (opt-in; OFF by default): if a request arrives without a valid
+token, the dependency falls back to a seeded local "Head Admin" dev user instead
+of rejecting it. This lets the whole app (chat, clustering, dashboards) be
+exercised locally without standing up Google OAuth. It stays off unless
+DEV_MODE=True is set in a local .env, so a public deployment with missing config
+fails safe. Real admin access in production comes from BOOTSTRAP_ADMIN_EMAILS.
 """
 
-from fastapi import Depends, HTTPException, status
+from fastapi import Depends, HTTPException, Request, status
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from sqlalchemy.orm import Session
 
@@ -172,6 +173,55 @@ def enforce_chat_rate_limit(
     rate_limiter.record(user.user_id)
     global_rate_limiter.record(GLOBAL_KEY)
     return user
+
+
+def enforce_guest_rate_limit(
+    request: Request,
+    db: Session = Depends(get_db),
+) -> None:
+    """Budget + abuse guard for the anonymous guest chat path.
+
+    Same checks as ``enforce_chat_rate_limit`` minus the per-user daily/burst
+    layers (guests have no account): the per-minute "front door" is keyed by
+    client IP instead. The global daily cap still protects the Gemini budget --
+    guest turns are logged to QueryLog, so ``global_turns_today`` counts them.
+
+    ponytail: no per-IP DAILY cap; the server-wide daily cap is the wallet guard,
+    add a per-IP daily counter only if guests turn out to abuse it.
+    """
+    if not settings.CHAT_ENABLED:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="The assistant is temporarily unavailable. Please check back later.",
+        )
+
+    global_daily_max = settings.RATE_LIMIT_GLOBAL_DAILY_MAX
+    if global_daily_max > 0 and usage.global_turns_today(db) >= global_daily_max:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="The assistant has reached today's usage limit. Please try again tomorrow.",
+            headers={"Retry-After": "3600"},
+        )
+
+    ip = request.client.host if request.client else "unknown"
+    allowed, retry_after = rate_limiter.allow(ip)
+    if not allowed:
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail="Rate limit exceeded. Please wait a moment before sending another message.",
+            headers={"Retry-After": str(retry_after)},
+        )
+
+    allowed_global, retry_global = global_rate_limiter.allow(GLOBAL_KEY)
+    if not allowed_global:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="The assistant is busy right now. Please try again in a moment.",
+            headers={"Retry-After": str(retry_global)},
+        )
+
+    rate_limiter.record(ip)
+    global_rate_limiter.record(GLOBAL_KEY)
 
 
 def require_admin(user: UserAccount = Depends(get_current_user)) -> UserAccount:
