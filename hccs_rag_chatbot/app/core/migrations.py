@@ -82,6 +82,17 @@ def _add_user_picture_url(conn: Connection) -> bool:
     return True
 
 
+def _add_query_logs_is_guest(conn: Connection) -> bool:
+    """query_logs.is_guest: marks turns from the anonymous guest endpoint so the
+    dashboard can distinguish guest inquiries from student ones."""
+    if _has_column(conn, "query_logs", "is_guest"):
+        return False
+    conn.exec_driver_sql(
+        "ALTER TABLE query_logs ADD COLUMN is_guest BOOLEAN NOT NULL DEFAULT 0"
+    )
+    return True
+
+
 # Ordered list of (description, migration_fn). Append new ones; never mutate
 # or remove existing entries.
 _MIGRATIONS = [
@@ -89,6 +100,7 @@ _MIGRATIONS = [
     ("add documents extraction fields", _add_document_extraction_fields),
     ("add chat_responses.is_fallback", _add_chat_response_is_fallback),
     ("add user_accounts.picture_url", _add_user_picture_url),
+    ("add query_logs.is_guest", _add_query_logs_is_guest),
 ]
 
 

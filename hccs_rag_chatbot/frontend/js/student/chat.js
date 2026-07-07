@@ -159,7 +159,10 @@ document.addEventListener("DOMContentLoaded", async () => {
         if (isHTML) {
             wrap.innerHTML = text; // Used for animated typing indicator
         } else if (role === "bot" && typeof marked !== "undefined") {
-            wrap.innerHTML = marked.parse(text); // Used for markdown
+            // Sanitize rendered markdown to strip any HTML/script (model output
+            // or source docs). Degrades to raw only if DOMPurify didn't load.
+            const rendered = marked.parse(text);
+            wrap.innerHTML = window.DOMPurify ? DOMPurify.sanitize(rendered) : rendered;
         } else {
             wrap.textContent = text;
         }
@@ -260,7 +263,7 @@ document.addEventListener("DOMContentLoaded", async () => {
 
         // Generate Header Title
         if (!currentSessionId && chatTitle) {
-            chatTitle.textContent = text.length > 30 ? text.substring(0, 30) + '...' : text;
+            chatTitle.textContent = prettyTitle(text);
         }
 
         revealHistory();
@@ -281,8 +284,9 @@ document.addEventListener("DOMContentLoaded", async () => {
                 await loadSidebarHistory();
             }
 
-            // Replace typing dots with actual answer
-            thinking.innerHTML = typeof marked !== "undefined" ? marked.parse(data.answer) : data.answer;
+            // Replace typing dots with actual answer (sanitized markdown)
+            const rendered = typeof marked !== "undefined" ? marked.parse(data.answer) : data.answer;
+            thinking.innerHTML = window.DOMPurify ? DOMPurify.sanitize(rendered) : rendered;
             addSources(data.sources);
 
             // If backend supports suggestions, render them:
@@ -295,6 +299,16 @@ document.addEventListener("DOMContentLoaded", async () => {
             chatInput.focus();
             scrollToBottom();
         }
+    }
+
+    // Prettify a raw first message into a title: trim, capitalize, cut on a word
+    // boundary. Used for the chat header (the sidebar list truncates via CSS).
+    function prettyTitle(text) {
+        text = (text || "").trim();
+        if (!text) return "New Conversation";
+        text = text[0].toUpperCase() + text.slice(1);
+        if (text.length <= 40) return text;
+        return text.slice(0, 40).replace(/\s+\S*$/, "").replace(/[ ,.;:]+$/, "") + "…";
     }
 
     // 4. Session Handling
@@ -496,24 +510,6 @@ document.addEventListener("DOMContentLoaded", async () => {
     // ==========================================
     // --- PRIVACY & DATA LOGIC ---
     // ==========================================
-    async function exportChats() {
-        try {
-            const data = await apiGet("/chat/export");
-            const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
-            const url = URL.createObjectURL(blob);
-            const a = document.createElement("a");
-            a.href = url;
-            a.download = `hccs-chat-export-${new Date().toISOString().slice(0, 10)}.json`;
-            document.body.appendChild(a);
-            a.click();
-            a.remove();
-            URL.revokeObjectURL(url);
-        } catch (err) {
-            console.error("Export failed:", err);
-            alert("Could not export your chats. Please try again.");
-        }
-    }
-
     async function clearAllHistory() {
         if (!confirm("This will permanently delete all of your chat history. This cannot be undone. Continue?")) return;
         try {
@@ -526,33 +522,8 @@ document.addEventListener("DOMContentLoaded", async () => {
         }
     }
 
-    const exportChatsBtn = document.getElementById("export-chats-btn");
-    if (exportChatsBtn) exportChatsBtn.addEventListener("click", exportChats);
-
     const clearHistoryBtn = document.getElementById("clear-history-btn");
     if (clearHistoryBtn) clearHistoryBtn.addEventListener("click", clearAllHistory);
-
-    // ==========================================
-    // --- HELP & ABOUT LOGIC ---
-    // Routes both buttons through the assistant itself rather than hardcoding
-    // a handbook URL or registrar email here -- those live in the indexed
-    // documents already and may change without this file being updated.
-    // ==========================================
-    function askAssistant(query) {
-        if (settingsOverlay) settingsOverlay.classList.add("hidden");
-        chatInput.value = query;
-        handleSend();
-    }
-
-    const helpHandbookBtn = document.getElementById("help-handbook-btn");
-    if (helpHandbookBtn) {
-        helpHandbookBtn.addEventListener("click", () => askAssistant("Where can I find the student handbook?"));
-    }
-
-    const helpRegistrarBtn = document.getElementById("help-registrar-btn");
-    if (helpRegistrarBtn) {
-        helpRegistrarBtn.addEventListener("click", () => askAssistant("How do I contact the registrar's office?"));
-    }
 
     // ==========================================
     // --- APPEARANCE & THEME LOGIC ---

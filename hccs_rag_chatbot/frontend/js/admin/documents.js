@@ -16,6 +16,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
     let selectedFile = null;
     let stageTimer = null;
+    let pollTimer = null;      // re-polls the list while a doc is still processing
     let replaceDocId = null;   // non-null => modal is replacing this document
     let currentDocs = [];      // last-rendered docs, for type/name lookup on replace
 
@@ -93,8 +94,10 @@ document.addEventListener("DOMContentLoaded", () => {
 
     // ============================ DOCUMENT LIST ============================
 
-    async function loadDocuments() {
-        docList.innerHTML = `<p class="loading-text" style="color:#64748b; padding:16px;">Loading documents…</p>`;
+    async function loadDocuments(silent = false) {
+        // Poll refreshes pass silent=true so the list doesn't flash "Loading…"
+        // every few seconds while a background OCR job is still running.
+        if (!silent) docList.innerHTML = `<p class="loading-text" style="color:#64748b; padding:16px;">Loading documents…</p>`;
         try {
             const docs = await apiGet("/documents");
             renderDocuments(docs || []);
@@ -176,7 +179,37 @@ document.addEventListener("DOMContentLoaded", () => {
             </div>`;
     }
 
+    // Server-side "processing": the row exists but its background OCR/indexing
+    // hasn't produced a verdict yet (no extraction_method, not active, not held).
+    // Mirrors the (is_active=False, needs_review=False, method=NULL) state the
+    // /documents/upload endpoint creates before its background task runs.
+    function isProcessing(d) {
+        return !d.is_active && !d.needs_review && !d.extraction_method;
+    }
+
+    // A real (server-tracked) processing card — same look as the client-side
+    // one, but rendered from the document list so it survives a page refresh and
+    // clears itself once the background job finishes.
+    function processingDocCardHTML(d) {
+        return `
+            <div class="doc-card processing" data-id="${d.document_id}">
+                <div class="doc-card-header">
+                    <div class="doc-title-area">${typeIcon(d.document_type)}<h4>${escapeHtml(d.document_name)}</h4></div>
+                </div>
+                <div class="doc-metrics-grid">
+                    <div class="metric-col" style="grid-column: 1 / -1;">
+                        <span class="metric-label">PROCESSING STATUS</span>
+                        <div class="processing-bar-container">
+                            <span class="processing-spinner"></span>
+                            <span class="metric-val blue-text">Extracting &amp; indexing… scanned PDFs can take a few minutes.</span>
+                        </div>
+                    </div>
+                </div>
+            </div>`;
+    }
+
     function docCardHTML(d) {
+        if (isProcessing(d)) return processingDocCardHTML(d);
         const conf = d.extraction_confidence ? d.extraction_confidence.toUpperCase() : "—";
         const method = d.extraction_method || "—";
         // Indexed docs show how often the chatbot used them; others show their type.
@@ -209,6 +242,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
     function renderDocuments(docs) {
         currentDocs = docs;
+        if (pollTimer) { clearTimeout(pollTimer); pollTimer = null; }
         if (!docs.length) {
             docList.innerHTML = `<p style="color:#64748b; padding:16px;">No documents yet. Click “Upload Document” to add one.</p>`;
             return;
@@ -216,6 +250,12 @@ document.addEventListener("DOMContentLoaded", () => {
         docList.innerHTML = docs
             .map((d, i) => docCardHTML(d) + (i < docs.length - 1 ? `<div class="doc-divider"></div>` : ""))
             .join("");
+        // A doc is still extracting/indexing in the background -> re-poll until
+        // it lands (flips to Active or Held). The list itself drives the poll,
+        // so it also resumes on a plain page refresh.
+        if (docs.some(isProcessing)) {
+            pollTimer = setTimeout(() => { loadDocuments(true); loadStats(); }, 4000);
+        }
     }
 
     // ============================ ROW ACTIONS ============================
@@ -371,9 +411,16 @@ document.addEventListener("DOMContentLoaded", () => {
                 ? await apiUpload(`/documents/${docId}/replace`, fd)
                 : await apiUpload("/documents/upload", fd);
             const verb = isReplace ? "updated" : "processed";
-            // Saved but held (low confidence / indexing error) -> surface why;
-            // the refreshed list will show it as "Held for Review".
-            if (!res.indexed) {
+            // Async upload: the request returns as soon as the file is saved;
+            // OCR + indexing run server-side and the list polls until the card
+            // flips to Active/Held. No waiting on the request => no tunnel 524.
+            if (res.status === "processing") {
+                window.pushNotification?.({
+                    type: "document",
+                    title: "Processing in the background",
+                    message: `“${name}” is being extracted and indexed. It appears in the list automatically when ready — safe to close this.`,
+                });
+            } else if (!res.indexed) {
                 if (res.index_error) console.warn(`[${isReplace ? "replace" : "upload"}] indexing error:`, res.index_error);
                 alert(res.message || "Saved, but held for review.");
                 window.pushNotification?.({

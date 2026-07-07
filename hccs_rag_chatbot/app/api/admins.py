@@ -44,6 +44,7 @@ class AdminOut(BaseModel):
     pending: bool  # invited but not yet signed in with Google
     last_active: datetime | None
     created_at: datetime | None
+    picture: str | None = None  # Google profile photo; None for pre-provisioned rows
 
 
 class AdminCreate(BaseModel):
@@ -71,6 +72,7 @@ def _serialize(u: UserAccount) -> AdminOut:
         pending=(u.google_id or "").startswith("pending:"),
         last_active=u.last_active,
         created_at=u.created_at,
+        picture=u.picture_url,
     )
 
 

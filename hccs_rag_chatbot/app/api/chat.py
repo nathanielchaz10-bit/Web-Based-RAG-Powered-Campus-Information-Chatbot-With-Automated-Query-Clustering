@@ -246,6 +246,7 @@ def guest_chat(
     query = QueryLog(
         query_text=message,
         session_id=None,  # anonymous guest: no session
+        is_guest=True,     # flag it so the dashboard can label guest inquiries
         timestamp=datetime.utcnow(),
         response_time_ms=result["response_time_ms"],
         is_valid=True,
@@ -302,6 +303,16 @@ def create_new_session(
     return {"session_id": session.session_id}
 
 
+def _session_title(text: str | None) -> str:
+    """Sidebar title from a session's first question: trimmed and capitalized.
+    The sidebar span truncates with a CSS ellipsis, so we only cap length (no
+    manual '...') and don't LLM-summarize -- cheap and budget-free."""
+    text = (text or "").strip()
+    if not text:
+        return "New Conversation"
+    return (text[0].upper() + text[1:])[:60]
+
+
 @router.get("/sessions")
 def get_user_sessions(
         db: Session = Depends(get_db),
@@ -325,8 +336,7 @@ def get_user_sessions(
             .first()
         )
 
-        # Fallback to "New Conversation" if there are no messages yet
-        title = first_query.query_text[:30] + "..." if (first_query and len(first_query.query_text) > 30) else (first_query.query_text if first_query else "New Conversation")
+        title = _session_title(first_query.query_text if first_query else None)
 
         result.append({
             "session_id": s.session_id,
@@ -381,7 +391,8 @@ def delete_session(
         db: Session = Depends(get_db),
         user: UserAccount = Depends(get_current_user)
 ):
-    """Delete a specific chat session and its history."""
+    """Delete a chat session. Its QueryLog rows are kept (session_id NULLed) so
+    they still feed admin dashboards / query clustering."""
     session = db.query(ChatSession).filter(
         ChatSession.session_id == session_id,
         ChatSession.user_id == user.user_id
@@ -403,13 +414,14 @@ def delete_all_sessions(
         db: Session = Depends(get_db),
         user: UserAccount = Depends(get_current_user)
 ):
-    """Permanently delete every chat session (and their queries/responses)
-    belonging to the current user. Backs the "Clear all chat history" button
-    in Settings → Privacy & Data.
+    """Delete every chat session belonging to the current user. Backs the
+    "Clear all chat history" button in Settings → Privacy & Data.
 
-    Uses db.delete() per-row (not a bulk query.delete()) so SQLAlchemy's ORM
-    cascades fire and QueryLog/ChatResponse rows are cleaned up too, same as
-    the single-session delete above.
+    Uses db.delete() per-row (not a bulk query.delete()) so SQLAlchemy's default
+    relationship handling NULLs each session's QueryLog.session_id instead of
+    deleting the rows. The student's conversations disappear, but the underlying
+    queries/responses are kept (de-identified) for admin dashboards and query
+    clustering.
     """
     sessions = db.query(ChatSession).filter(ChatSession.user_id == user.user_id).all()
     count = len(sessions)
@@ -418,57 +430,3 @@ def delete_all_sessions(
     db.commit()
 
     return {"status": "success", "deleted_count": count}
-
-
-@router.get("/export")
-def export_my_chats(
-        db: Session = Depends(get_db),
-        user: UserAccount = Depends(get_current_user)
-):
-    """Return every conversation the current user has had, as JSON, for the
-    "Export my chats" button in Settings → Privacy & Data. The frontend turns
-    this straight into a downloadable file -- no PII beyond the user's own
-    email is included.
-    """
-    sessions = (
-        db.query(ChatSession)
-        .filter(ChatSession.user_id == user.user_id)
-        .order_by(ChatSession.created_at.asc())
-        .all()
-    )
-
-    exported_sessions = []
-    for session in sessions:
-        queries = (
-            db.query(QueryLog)
-            .filter(QueryLog.session_id == session.session_id)
-            .order_by(QueryLog.timestamp.asc())
-            .all()
-        )
-
-        messages = []
-        for q in queries:
-            messages.append({
-                "role": "user",
-                "content": q.query_text,
-                "timestamp": q.timestamp.isoformat() if q.timestamp else None,
-            })
-            if q.response:
-                messages.append({
-                    "role": "bot",
-                    "content": q.response.response_text,
-                    "sources": json.loads(q.response.source_chunks) if q.response.source_chunks else [],
-                    "timestamp": q.response.generated_at.isoformat() if q.response.generated_at else None,
-                })
-
-        exported_sessions.append({
-            "session_id": session.session_id,
-            "created_at": session.created_at.isoformat() if session.created_at else None,
-            "messages": messages,
-        })
-
-    return {
-        "exported_at": datetime.utcnow().isoformat(),
-        "user_email": user.email,
-        "sessions": exported_sessions,
-    }

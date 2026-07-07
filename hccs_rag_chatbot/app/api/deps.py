@@ -14,7 +14,13 @@ from sqlalchemy.orm import Session
 
 from app.core.config import settings
 from app.core.database import get_db
-from app.core.rate_limit import GLOBAL_KEY, global_rate_limiter, rate_limiter
+from app.core.rate_limit import (
+    GLOBAL_KEY,
+    global_rate_limiter,
+    guest_daily_rate_limiter,
+    guest_rate_limiter,
+    rate_limiter,
+)
 from app.core import usage
 from app.core.security import decode_access_token, TokenError
 from app.models.role import Role
@@ -32,6 +38,32 @@ DEFAULT_ROLES = [
 # auto_error=False so missing/invalid headers don't 403 before we can apply the
 # DEV_MODE fallback ourselves.
 _bearer = HTTPBearer(auto_error=False)
+
+
+def client_ip(request: Request) -> str:
+    """Best-effort real visitor IP, used to key the per-guest rate limits.
+
+    The app runs behind a Cloudflare Tunnel (cloudflared -> local uvicorn), so
+    ``request.client.host`` is the tunnel's loopback address for EVERY visitor.
+    Keying the guest limits on that would collapse them into a single shared
+    global bucket (one 5/min + 10/day for the whole world). Cloudflare forwards
+    the true client IP in ``CF-Connecting-IP`` (and at the head of
+    ``X-Forwarded-For``), so prefer those; fall back to the socket peer for
+    direct/local access.
+
+    Note: these headers are only trustworthy because Cloudflare is the sole
+    ingress. A client hitting uvicorn directly on the LAN could spoof them to get
+    fresh buckets -- bind uvicorn to 127.0.0.1 (tunnel-only) if that matters. The
+    server-wide daily cap remains the hard budget backstop regardless.
+    """
+    cf = request.headers.get("cf-connecting-ip")
+    if cf:
+        return cf.strip()
+    xff = request.headers.get("x-forwarded-for")
+    if xff:
+        # First entry is the original client; the rest are proxy hops.
+        return xff.split(",")[0].strip()
+    return request.client.host if request.client else "unknown"
 
 
 def ensure_roles(db: Session) -> None:
@@ -181,13 +213,15 @@ def enforce_guest_rate_limit(
 ) -> None:
     """Budget + abuse guard for the anonymous guest chat path.
 
-    Same checks as ``enforce_chat_rate_limit`` minus the per-user daily/burst
-    layers (guests have no account): the per-minute "front door" is keyed by
-    client IP instead. The global daily cap still protects the Gemini budget --
-    guest turns are logged to QueryLog, so ``global_turns_today`` counts them.
+    Guests get their OWN, stricter budget (see RATE_LIMIT_GUEST_* in config):
+    a tighter per-minute "front door" and a rolling-24h daily cap, both keyed by
+    client IP since guests have no account. On top of that the server-wide
+    per-minute back door and daily cap still apply -- guest turns are logged to
+    QueryLog, so ``global_turns_today`` counts them toward the Gemini budget.
 
-    ponytail: no per-IP DAILY cap; the server-wide daily cap is the wallet guard,
-    add a per-IP daily counter only if guests turn out to abuse it.
+    All layers are peeked with ``allow()`` first; a slot is only spent
+    (``record()``) once the request clears every layer, so a rejection in one
+    never burns budget in another.
     """
     if not settings.CHAT_ENABLED:
         raise HTTPException(
@@ -203,12 +237,25 @@ def enforce_guest_rate_limit(
             headers={"Retry-After": "3600"},
         )
 
-    ip = request.client.host if request.client else "unknown"
-    allowed, retry_after = rate_limiter.allow(ip)
+    ip = client_ip(request)
+
+    # Guest-only daily cap (stricter than the per-student daily cap).
+    allowed_daily, retry_daily = guest_daily_rate_limiter.allow(ip)
+    if not allowed_daily:
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail="Guests can only ask a limited number of questions per day. "
+                   "Please sign in with your @hccs.edu.ph account for full access, "
+                   "or try again tomorrow.",
+            headers={"Retry-After": str(retry_daily)},
+        )
+
+    # Guest-only per-minute front door (stricter than the per-student burst cap).
+    allowed, retry_after = guest_rate_limiter.allow(ip)
     if not allowed:
         raise HTTPException(
             status_code=status.HTTP_429_TOO_MANY_REQUESTS,
-            detail="Rate limit exceeded. Please wait a moment before sending another message.",
+            detail="You're sending messages too quickly. Please wait a moment before trying again.",
             headers={"Retry-After": str(retry_after)},
         )
 
@@ -220,7 +267,8 @@ def enforce_guest_rate_limit(
             headers={"Retry-After": str(retry_global)},
         )
 
-    rate_limiter.record(ip)
+    guest_daily_rate_limiter.record(ip)
+    guest_rate_limiter.record(ip)
     global_rate_limiter.record(GLOBAL_KEY)
 
 

@@ -135,6 +135,13 @@ function renderAdminRow(a, i) {
 
     const pill = ROLE_PILL[a.role] || 'fin';
     const avatar = AVATAR_COLORS[i % AVATAR_COLORS.length];
+
+    // Prefer the Google profile photo; fall back to coloured initials.
+    // referrerpolicy=no-referrer: Google's lh3.googleusercontent.com avatars
+    // often 403 when a Referer is sent, which would show a broken image.
+    const avatarInner = a.picture
+        ? `<img src="${escapeHtml(a.picture)}" alt="" referrerpolicy="no-referrer" style="width:100%;height:100%;border-radius:50%;object-fit:cover;">`
+        : escapeHtml(adminInitials(a.display_name));
     const deactivatedBadge = a.is_active ? ''
         : ' <span class="role-pill" style="background:#fee2e2;color:#b91c1c;">Deactivated</span>';
 
@@ -154,7 +161,7 @@ function renderAdminRow(a, i) {
     tr.innerHTML = `
         <td>
             <div class="admin-name-cell">
-                <div class="admin-avatar ${avatar}">${escapeHtml(adminInitials(a.display_name))}</div>
+                <div class="admin-avatar ${avatar}">${avatarInner}</div>
                 <div class="admin-name-info">
                     <strong>${escapeHtml(a.display_name)}${deactivatedBadge}</strong>
                     <span>${escapeHtml(a.email)}</span>

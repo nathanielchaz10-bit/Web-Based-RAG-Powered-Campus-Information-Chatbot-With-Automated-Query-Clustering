@@ -17,13 +17,13 @@ This is the backend for the "upload documents" admin feature.
 import os
 from datetime import datetime
 
-from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
+from fastapi import APIRouter, BackgroundTasks, Depends, File, Form, HTTPException, UploadFile
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from app.api.deps import require_admin
 from app.core.config import settings
-from app.core.database import get_db
+from app.core.database import SessionLocal, get_db
 from app.models.document import Document
 from app.models.document_chunk import DocumentChunk
 from app.models.document_retrieval import DocumentRetrieval
@@ -112,12 +112,12 @@ def _index_and_record(db: Session, doc: Document, text: str) -> int:
     return len(added)
 
 
-def _store_and_extract(file: UploadFile, *, force_ocr: bool):
-    """Save an uploaded file to its uploads/<sub>/ folder and extract its text.
+def _save_upload(file: UploadFile):
+    """Validate + save an uploaded file to its uploads/<sub>/ folder, no extraction.
 
-    Shared by upload and replace. Returns (filename, subfolder, content,
-    result). Raises HTTPException for a bad extension or a failed extraction
-    (cleaning up the half-written file in the latter case).
+    Returns (filename, subfolder, dest_path, content). Raises HTTPException for a
+    bad extension. Extraction is deferred to the caller so the async upload path
+    can run OCR in the background instead of holding the request open.
     """
     filename = _safe_filename(file.filename or "")
     ext = _extension(filename)
@@ -136,24 +136,19 @@ def _store_and_extract(file: UploadFile, *, force_ocr: bool):
     with open(dest_path, "wb") as fh:
         fh.write(content)
 
-    # Extract text. OCR fires per page for scanned/image-heavy pages; force_ocr
-    # OCRs everything with the color/layout-aware prompt (table/calendar docs).
-    try:
-        result = ingest_document(dest_path, force_ocr=force_ocr)
-    except Exception as exc:
-        # Don't leave an unusable file lying around if extraction blew up.
-        try:
-            os.remove(dest_path)
-        except OSError:
-            pass
-        raise HTTPException(status_code=502, detail=f"Document extraction failed: {exc}")
+    return filename, subfolder, dest_path, content
 
-    # When OCR contributed text (scanned pages, or a docx's embedded images),
-    # persist the recovered text as a sidecar .txt so a future full rebuild --
-    # which reads files, not the live index -- recovers it too (mirrors how the
-    # seeded facilities directory is handled). When a (non-txt) file is read
-    # cleanly without OCR, drop any stale sidecar from a prior OCR ingest of the
-    # same name so a rebuild can't pick up outdated recovered text.
+
+def _extract_with_sidecar(dest_path: str, filename: str, *, force_ocr: bool):
+    """Extract text (OCR per page for scanned/image pages; force_ocr OCRs
+    everything with the color/layout-aware prompt) and keep OCR text as a
+    sidecar .txt so a future full rebuild -- which reads files, not the live
+    index -- recovers it too. Drops a stale sidecar when a non-txt file now
+    reads cleanly without OCR. Raises on extraction failure; callers decide
+    whether that's an HTTP error or a held document."""
+    result = ingest_document(dest_path, force_ocr=force_ocr)
+
+    ext = _extension(filename)
     txt_dir = os.path.join(settings.UPLOADS_PATH, "txt")
     sidecar = os.path.join(txt_dir, os.path.splitext(filename)[0] + ".txt")
     if result.ocr_used:
@@ -165,6 +160,27 @@ def _store_and_extract(file: UploadFile, *, force_ocr: bool):
             os.remove(sidecar)
         except OSError:
             pass
+
+    return result
+
+
+def _store_and_extract(file: UploadFile, *, force_ocr: bool):
+    """Save an uploaded file and extract its text synchronously (used by replace).
+
+    Returns (filename, subfolder, content, result). Raises HTTPException for a
+    bad extension or a failed extraction (cleaning up the half-written file in
+    the latter case).
+    """
+    filename, subfolder, dest_path, content = _save_upload(file)
+    try:
+        result = _extract_with_sidecar(dest_path, filename, force_ocr=force_ocr)
+    except Exception as exc:
+        # Don't leave an unusable file lying around if extraction blew up.
+        try:
+            os.remove(dest_path)
+        except OSError:
+            pass
+        raise HTTPException(status_code=502, detail=f"Document extraction failed: {exc}")
 
     return filename, subfolder, content, result
 
@@ -227,15 +243,59 @@ def _bump_version(version: str | None) -> str:
         return "1.1"
 
 
+def _process_upload(document_id: int, dest_path: str, filename: str, force_ocr: bool):
+    """Background job: extract (OCR if needed) + index a just-uploaded document,
+    then refresh the chat chain. Runs AFTER the HTTP response is sent, so a slow
+    scanned-PDF OCR (minutes) no longer holds the request open past the
+    Cloudflare tunnel's ~100s cap. Owns its own DB session (the request's is
+    closed by now).
+
+    ponytail: runs in FastAPI's threadpool -- one OCR holds a thread for minutes,
+    which is fine for a single-admin local deploy. If the server restarts
+    mid-OCR the doc stays 'processing'; re-upload or use database/ingest_file.py.
+    Move to a real job queue only if concurrent bulk uploads become a thing.
+    """
+    db = SessionLocal()
+    try:
+        doc = db.query(Document).get(document_id)
+        if not doc:
+            return
+        try:
+            result = _extract_with_sidecar(dest_path, filename, force_ocr=force_ocr)
+        except Exception as exc:
+            # Extraction blew up (bad file, OCR/quota error). Don't leave the doc
+            # stuck 'processing' -- hold it so the admin sees it and can retry.
+            doc.extraction_method = "failed"
+            doc.needs_review = True
+            db.commit()
+            print(f"[upload:bg] extraction failed for {filename}: {exc}")
+            return
+
+        outcome = _finalize_index(db, doc, result)
+        db.commit()
+        if outcome["indexed"]:
+            rag_service.reset_chain()  # chat reloads the corpus on next query
+    finally:
+        db.close()
+
+
 @router.post("/upload")
 def upload_document(
+    background: BackgroundTasks,
     file: UploadFile = File(...),
     document_type: str = Form(...),
     force_ocr: bool = Form(False),
     db: Session = Depends(get_db),
     user: UserAccount = Depends(require_admin),
 ):
-    filename, subfolder, content, result = _store_and_extract(file, force_ocr=force_ocr)
+    """Accept the file and return immediately; OCR + indexing run in the
+    background (see _process_upload). The doc is created 'processing' --
+    inactive, not-yet-reviewed, no extraction_method -- and flips to
+    active/held once the job finishes; the admin list view polls until then.
+    This keeps the request well under the tunnel's ~100s timeout even for long
+    scanned-PDF OCR that previously 524'd the browser while the server kept
+    churning invisibly (and retries piled up, draining the Gemini quota)."""
+    filename, subfolder, dest_path, content = _save_upload(file)
 
     doc = Document(
         document_name=filename,
@@ -244,32 +304,19 @@ def upload_document(
         upload_size=len(content),
         uploaded_by_user_id=user.user_id,
         is_active=False,
+        needs_review=False,  # (inactive, not-review, no method) == "processing"
     )
     db.add(doc)
-    db.flush()  # assign document_id
+    db.commit()  # persist so the background session (and the list poll) can see it
 
-    # Index the extracted text (or hold it for review). If indexing can't
-    # complete -- missing/invalid API key, exhausted quota, a transient Google
-    # error, or every chunk getting filtered -- the doc is HELD instead of
-    # failing the upload: the file and its text are already saved, so the admin
-    # can retry with "Approve" once the cause is fixed, rather than getting a
-    # 500 that loses the work and explains nothing.
-    outcome = _finalize_index(db, doc, result)
-    db.commit()
-
-    if outcome["indexed"]:
-        rag_service.reset_chain()  # chat reloads the corpus on next query
+    background.add_task(_process_upload, doc.document_id, dest_path, filename, force_ocr)
 
     return {
         "document_id": doc.document_id,
         "document_name": filename,
         "document_type": document_type,
-        "pages": result.pages,
-        "chars": result.chars,
-        "extraction_method": result.method,
-        "confidence": result.confidence,
-        "needs_review": doc.needs_review,
-        **outcome,
+        "status": "processing",
+        "message": "Uploaded — extracting and indexing in the background.",
     }
 
 

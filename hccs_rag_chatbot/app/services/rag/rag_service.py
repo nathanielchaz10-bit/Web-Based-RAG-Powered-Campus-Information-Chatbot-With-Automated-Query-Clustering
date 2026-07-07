@@ -50,15 +50,21 @@ def reset_chain() -> None:
 
 
 def _extract_sources(context_docs) -> list[str]:
-    """Turn retrieved chunk metadata into a clean, de-duplicated source list."""
-    sources = set()
+    """Cite just the single most relevant source: the document behind the
+    top-ranked retrieved chunk.
+
+    context_docs arrives ordered by relevance (RRF score in the fusion path,
+    similarity in the guest/non-fusion paths), so the first chunk that carries a
+    source is the primary one. A simple question shouldn't show a pile of
+    documents. (Full retrieval is still logged via retrieved_document_ids, so
+    document-usage analytics are unaffected.)
+    """
     for doc in context_docs or []:
         src = (getattr(doc, "metadata", {}) or {}).get("source", "")
         if src:
             name = os.path.splitext(os.path.basename(src))[0]
-            name = name.replace("_", " ").replace("-", " ").title()
-            sources.add(name)
-    return sorted(sources)
+            return [name.replace("_", " ").replace("-", " ").title()]
+    return []
 
 
 def _retrieved_document_ids(context_docs) -> list[int]:
@@ -157,13 +163,13 @@ def answer_query_restricted(question: str, allowed_document_ids) -> dict:
     ponytail: single-query retrieval, no RAG-Fusion/history rewrite -- guests are
     anonymous and one-shot, so the extra Gemini calls those add aren't worth it.
     """
-    from app.services.rag.rag_engine import FALLBACK_MESSAGE, is_no_answer
+    from app.services.rag.rag_engine import GUEST_FALLBACK_MESSAGE, is_no_answer
 
     ids = [int(i) for i in (allowed_document_ids or [])]
     if not ids:
         # No guest-visible documents configured/active -> nothing to answer from.
         return {
-            "answer": FALLBACK_MESSAGE, "is_fallback": True, "sources": [],
+            "answer": GUEST_FALLBACK_MESSAGE, "is_fallback": True, "sources": [],
             "retrieved_document_ids": [], "response_time_ms": 0, "num_context_docs": 0,
         }
 
@@ -180,7 +186,7 @@ def answer_query_restricted(question: str, allowed_document_ids) -> dict:
 
     is_fallback = is_no_answer(answer)
     if is_fallback:
-        answer = FALLBACK_MESSAGE
+        answer = GUEST_FALLBACK_MESSAGE
 
     return {
         "answer": answer,

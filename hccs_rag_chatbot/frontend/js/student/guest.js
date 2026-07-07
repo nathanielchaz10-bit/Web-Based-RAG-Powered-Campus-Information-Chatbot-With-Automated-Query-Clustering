@@ -26,7 +26,10 @@ document.addEventListener("DOMContentLoaded", () => {
         const wrap = document.createElement("div");
         wrap.className = "chat-msg-content";
         if (isHTML) wrap.innerHTML = text;
-        else if (role === "bot" && typeof marked !== "undefined") wrap.innerHTML = marked.parse(text);
+        else if (role === "bot" && typeof marked !== "undefined") {
+            const rendered = marked.parse(text);
+            wrap.innerHTML = window.DOMPurify ? DOMPurify.sanitize(rendered) : rendered;
+        }
         else wrap.textContent = text;
         row.appendChild(wrap);
         chatHistory.appendChild(row);
@@ -102,7 +105,8 @@ document.addEventListener("DOMContentLoaded", () => {
         const thinking = addBubble("bot", loaderHTML, true);
         try {
             const data = await apiPost("/chat/guest", { message: text });
-            thinking.innerHTML = typeof marked !== "undefined" ? marked.parse(data.answer) : data.answer;
+            const rendered = typeof marked !== "undefined" ? marked.parse(data.answer) : data.answer;
+            thinking.innerHTML = window.DOMPurify ? DOMPurify.sanitize(rendered) : rendered;
             addSources(data.sources);
         } catch (err) {
             thinking.textContent = "Error: " + err.message;

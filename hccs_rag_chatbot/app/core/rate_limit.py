@@ -122,3 +122,17 @@ global_rate_limiter = SlidingWindowRateLimiter(
     "RATE_LIMIT_GLOBAL_MAX_REQUESTS", "RATE_LIMIT_GLOBAL_WINDOW_SECONDS"
 )
 GLOBAL_KEY = "__chat_global__"
+
+# Guest "front door": a stricter per-minute cap for the anonymous /chat/guest
+# endpoint, keyed by client IP (guests have no user_id). Tighter than the
+# authenticated per-user limiter above.
+guest_rate_limiter = SlidingWindowRateLimiter(
+    "RATE_LIMIT_GUEST_MAX_REQUESTS", "RATE_LIMIT_GUEST_WINDOW_SECONDS"
+)
+
+# Guest daily cap: a rolling-24h per-IP ceiling, stricter than the per-student
+# daily cap. In-memory like the others (resets on restart); the DB-backed global
+# daily cap remains the real budget backstop.
+guest_daily_rate_limiter = SlidingWindowRateLimiter(
+    "RATE_LIMIT_GUEST_DAILY_MAX", "RATE_LIMIT_GUEST_DAILY_WINDOW_SECONDS"
+)

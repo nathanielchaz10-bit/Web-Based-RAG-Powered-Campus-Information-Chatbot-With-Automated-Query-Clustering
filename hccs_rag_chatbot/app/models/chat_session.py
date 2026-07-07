@@ -34,12 +34,14 @@ class ChatSession(Base):
     # Many ChatSessions → One UserAccount
     user = relationship("UserAccount", back_populates="sessions")
 
-    # One ChatSession → Many QueryLogs
-    queries = relationship(
-        "QueryLog",
-        back_populates="session",
-        cascade="all, delete-orphan"
-    )
+    # One ChatSession → Many QueryLogs.
+    # No delete cascade on purpose: deleting a session NULLs its queries'
+    # session_id (FK is nullable, ondelete=SET NULL) instead of deleting them, so
+    # the QueryLog rows survive for admin dashboards / query clustering when a
+    # student clears their chat history.
+    # ponytail: relies on SQLAlchemy's default FK-nullify on parent delete — no
+    # per-endpoint code needed.
+    queries = relationship("QueryLog", back_populates="session")
 
     def __repr__(self):
         return (

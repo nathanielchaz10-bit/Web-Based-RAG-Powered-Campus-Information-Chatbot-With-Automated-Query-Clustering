@@ -3,12 +3,16 @@
 // derived from institutional query data — keep them answerable from the indexed
 // documents so a click doesn't dead-end in a "couldn't find that" reply.
 
+// These map to the "Frequently Asked Questions" knowledge doc (uploads/txt/,
+// type DIRECTORY) so a click is grounded and answered formally by the bot —
+// and so the same facts are available when a student types the question or
+// asks a follow-up. Re-ingest that doc after editing it (see database/ingest_file.py).
 const STUDENT_FAQS = [
-    "What are the enrollment requirements?",
-    "When does enrollment start?",
-    "What scholarships are available?",
-    "How do I apply for a scholarship?",
-    "Where can I find the student handbook?",
+    "What are the school's office hours?",
+    "How can I contact the school?",
+    "How do I request my Form 137?",
+    "How do I contact the Registrar's Office?",
+    "How do I contact the Alumni Office?",
 ];
 
 // Guests can only reach the enrollment + scholarship documents, so their

@@ -237,15 +237,19 @@ def recent_inquiries(
     term = q.strip()
     if term:
         like = f"%{term}%"
+        conds = [
+            QueryLog.query_text.ilike(like),
+            QueryLog.detected_intent.ilike(like),
+            QueryLog.sentiment.ilike(like),
+            UserAccount.email.ilike(like),
+        ]
+        # Let admins find guest inquiries by typing "guest".
+        if term.lower() in "guest":
+            conds.append(QueryLog.is_guest.is_(True))
         base = (
             base.outerjoin(ChatSession, QueryLog.session_id == ChatSession.session_id)
             .outerjoin(UserAccount, ChatSession.user_id == UserAccount.user_id)
-            .filter(or_(
-                QueryLog.query_text.ilike(like),
-                QueryLog.detected_intent.ilike(like),
-                QueryLog.sentiment.ilike(like),
-                UserAccount.email.ilike(like),
-            ))
+            .filter(or_(*conds))
         )
 
     total = base.count()
@@ -253,13 +257,17 @@ def recent_inquiries(
 
     items = []
     for qr in rows:
-        email = "—"
-        if qr.session and qr.session.user:
+        if qr.is_guest:
+            email = "Guest"
+        elif qr.session and qr.session.user:
             email = qr.session.user.email
+        else:
+            email = "—"
         items.append({
             "timestamp": qr.timestamp.strftime("%Y-%m-%d %H:%M") if qr.timestamp else "",
             "query_text": qr.query_text,
             "user_email": email,
+            "is_guest": bool(qr.is_guest),
             "intent": qr.detected_intent or "General Inquiry",
             "sentiment": qr.sentiment or "Neutral",
         })

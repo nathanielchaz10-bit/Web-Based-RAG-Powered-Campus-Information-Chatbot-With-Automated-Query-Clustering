@@ -56,6 +56,12 @@ class QueryLog(Base):
     # Quality and validation flags
     is_valid = Column(Boolean, default=True, nullable=False)
 
+    # True when the turn came from the anonymous guest endpoint (/chat/guest),
+    # which has no ChatSession/user. Lets the dashboard label guest inquiries.
+    # More reliable than inferring from a NULL session_id: a student session can
+    # be deleted, which SET NULLs its queries' session_id.
+    is_guest = Column(Boolean, default=False, nullable=False)
+
     # Performance metrics
     response_time_ms = Column(Integer, nullable=True)
 

@@ -248,13 +248,25 @@ async function injectDevLogin() {
     document.getElementById("dev-admin").addEventListener("click", () => devLogin("Head Admin"));
 }
 
+// Friendly copy for the short error codes the backend puts in ?error=.
+// Anything not listed (e.g. JS-supplied messages) is shown as-is.
+const LOGIN_ERROR_MESSAGES = {
+    "Access denied":
+        "The chatbot is only available to Holy Child Catholic School accounts. " +
+        "Please sign in with your @hccs.edu.ph Google account.",
+    "Account deactivated":
+        "Your account has been deactivated. If you think this is a mistake, " +
+        "please contact the school office.",
+};
+
 function showLoginError(message) {
     const errorEl = document.getElementById("login-error");
+    const text = LOGIN_ERROR_MESSAGES[message] || message;
     if (errorEl) {
-        errorEl.textContent = message;
+        errorEl.textContent = text;
         errorEl.classList.remove("hidden");
     } else {
-        console.error("Login Error:", message);
-        alert(message);
+        console.error("Login Error:", text);
+        alert(text);
     }
 }

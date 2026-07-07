@@ -40,7 +40,7 @@ function renderSidebar(user) {
 
     sidebar.innerHTML = `
         <div class="sidebar-brand">
-            <p class="sidebar-brand-title">HCCS Admin Portal</p>
+            <p class="sidebar-brand-title">Chatbot Admin Portal</p>
             <p class="sidebar-brand-sub">Holy Child Catholic School</p>
         </div>
         <nav class="sidebar-nav">
@@ -374,7 +374,7 @@ function setActivityMode(showAll) {
     if (link) link.textContent = showAll ? "SHOW RECENT ONLY" : "VIEW ALL ACTIVITY";
 
     const heading = document.getElementById("inquiries-heading");
-    if (heading) heading.textContent = showAll ? "ALL STUDENT INQUIRIES" : "RECENT STUDENT INQUIRIES";
+    if (heading) heading.textContent = showAll ? "ALL INQUIRIES" : "RECENT INQUIRIES";
 
     // Cap the height + scroll in browse mode so a full page of rows doesn't
     // push the rest of the dashboard down.
@@ -474,7 +474,7 @@ function renderInquiries() {
         tr.innerHTML = `
             <td>${row.timestamp}</td>
             <td>${escapeHtml(row.query_text)}</td>
-            <td class="text-secondary">${row.user_email}</td>
+            <td class="text-secondary">${row.is_guest ? '<span class="guest-badge">Guest</span>' : escapeHtml(row.user_email)}</td>
             <td>
                 <span class="intent-pill ${intentClass(row.intent)}">
                     ${row.intent}

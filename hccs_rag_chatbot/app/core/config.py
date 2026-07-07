@@ -165,6 +165,18 @@ class Settings(BaseSettings):
     # leaves headroom. When hit, chat pauses until the next UTC day. Google's
     # billing is the hard backstop. Set <= 0 to disable.
     RATE_LIMIT_GLOBAL_DAILY_MAX: int = 300
+
+    # --- Guest chat limits (deliberately stricter than the student caps) -----
+    # The anonymous /chat/guest endpoint is public and unauthenticated, so it
+    # gets its own tighter budget keyed by client IP: a per-minute "front door"
+    # and a rolling-24h daily cap, both below the authenticated-student values
+    # above (10/min, 20/day). The server-wide daily cap (RATE_LIMIT_GLOBAL_DAILY_MAX)
+    # still applies on top as the real wallet guard. Set <= 0 to disable a layer.
+    RATE_LIMIT_GUEST_MAX_REQUESTS: int = 5           # per IP per window (vs 10 student)
+    RATE_LIMIT_GUEST_WINDOW_SECONDS: int = 60
+    RATE_LIMIT_GUEST_DAILY_MAX: int = 10             # per IP per rolling day (vs 20 student)
+    RATE_LIMIT_GUEST_DAILY_WINDOW_SECONDS: int = 86400
+
     # Manual kill switch: flip to False (or toggle in Portal Settings) to pause
     # the chatbot for everyone instantly, without stopping the server.
     CHAT_ENABLED: bool = True

@@ -36,6 +36,17 @@ FALLBACK_MESSAGE = (
     "Please try rephrasing your question, or contact the school office for assistance."
 )
 
+# Guest mode retrieves ONLY from the guest-visible categories
+# (settings.GUEST_DOCUMENT_TYPES — enrollment & financial by default). When a
+# guest asks about anything outside that scope, the filtered retrieval finds
+# nothing and the model emits NO_ANSWER; show this scope-aware message instead of
+# the generic fallback so the guest understands the limits and how to get more.
+GUEST_FALLBACK_MESSAGE = (
+    "As a guest, I can only answer questions about enrollment and tuition or "
+    "other financial matters. For anything else, please sign in with your "
+    "@hccs.edu.ph account, or contact the school office for assistance."
+)
+
 # Backstop refusal phrases, for the rare case the model declines in prose
 # instead of emitting the sentinel.
 _NATURAL_REFUSALS = (
