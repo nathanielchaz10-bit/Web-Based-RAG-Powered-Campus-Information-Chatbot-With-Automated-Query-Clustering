@@ -18,7 +18,7 @@ Reads are open to any admin; writes are Head-Admin-only, with guards against
 locking everyone out (no deactivating yourself or the last active Head Admin).
 """
 
-from datetime import datetime
+from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
@@ -70,8 +70,11 @@ def _serialize(u: UserAccount) -> AdminOut:
         role=u.role.role_name if u.role else "—",
         is_active=u.is_active,
         pending=(u.google_id or "").startswith("pending:"),
-        last_active=u.last_active,
-        created_at=u.created_at,
+        # Stored naive UTC; stamp it UTC-aware so the frontend's new Date()/
+        # toLocaleString renders it in the viewer's local time instead of
+        # mis-parsing a bare timestamp as local.
+        last_active=u.last_active.replace(tzinfo=timezone.utc) if u.last_active else None,
+        created_at=u.created_at.replace(tzinfo=timezone.utc) if u.created_at else None,
         picture=u.picture_url,
     )
 

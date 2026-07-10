@@ -7,7 +7,7 @@ Endpoint shapes match what frontend/js/admin/dashboard.js already expects:
   GET /dashboard/recent-inquiries
 """
 
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 from fastapi import APIRouter, Depends
 from sqlalchemy import or_
@@ -26,6 +26,17 @@ from app.models.user_account import UserAccount
 from app.services.rag import rag_service
 
 router = APIRouter(prefix="/dashboard", tags=["Dashboard"])
+
+# Timestamps are stored as naive UTC (datetime.utcnow); render them in the
+# school's local time. ponytail: fixed +8 — Philippines has no DST; swap for
+# zoneinfo("Asia/Manila") if the school ever moves timezone.
+PH_TZ = timezone(timedelta(hours=8))
+
+
+def _to_ph(dt):
+    """Naive-UTC datetime -> Philippine local time (UTC+8)."""
+    return dt.replace(tzinfo=timezone.utc).astimezone(PH_TZ)
+
 
 _FALLBACK_PHRASES = (
     "i don't know", "i do not know", "don't have information",
@@ -264,7 +275,7 @@ def recent_inquiries(
         else:
             email = "—"
         items.append({
-            "timestamp": qr.timestamp.strftime("%Y-%m-%d %H:%M") if qr.timestamp else "",
+            "timestamp": _to_ph(qr.timestamp).strftime("%Y-%m-%d %I:%M %p") if qr.timestamp else "",
             "query_text": qr.query_text,
             "user_email": email,
             "is_guest": bool(qr.is_guest),
